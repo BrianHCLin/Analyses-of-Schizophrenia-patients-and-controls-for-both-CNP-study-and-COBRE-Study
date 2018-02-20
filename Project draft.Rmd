@@ -1,10 +1,10 @@
 ---
-  title: "project"
+title: "project"
 author: "Brian Lin"
 date: "February 14, 2018"
 output: html_document
 ---
-  ```{r}
+```{r}
 
 library(rJava)
 library(xlsx)
@@ -29,10 +29,10 @@ CNPDemographic <- read.xlsx("CNPDemographicMeasures.xlsx", sheetName = "SNF")
 pattern <- "[a-z]*-"
 
 CNP_within$Subject_ID <- as.numeric(str_replace_all(CNP_within$Subject_ID 
-                                                    , pattern,""))
+, pattern,""))
 
 CNP_between$Subject_ID <- as.numeric(str_replace_all(CNP_between$Subject_ID 
-                                                     , pattern,""))
+, pattern,""))
 
 
 
@@ -59,10 +59,10 @@ COBRE_within <- read.table("COBRE_within_nets.txt", header = TRUE)
 #Revmove character string 
 
 COBRE_between$Subject_ID <- as.numeric(str_replace_all(COBRE_between$Subject_ID 
-                                                       , pattern,""))
+, pattern,""))
 
 COBRE_within$Subject_ID <- as.numeric(str_replace_all(COBRE_within$Subject_ID 
-                                                      , pattern,""))
+, pattern,""))
 
 
 
@@ -108,13 +108,13 @@ CNP_within_merge <- CNP_within_merge %>%
 
 table(CNP_within_merge$Subject_Type)
 
-
+  
 CNP_between_merge <- CNP_between_merge %>%
   filter(Subject_Type == "Control" | Subject_Type == "Schizophrenia")
 
 table(CNP_between_merge$Subject_Type)
-
-
+  
+  
 
 
 #COBRE filter
@@ -212,7 +212,7 @@ rf_m1 <- randomForest(as.factor(Subject_Type)~.,data = CNP_between_RF_subset, im
 importance_between <- importance(rf_m1)
 
 varimportance_between <- data.frame(Variables= row.names(importance_between),
-                                    importance = round(importance_between[,"MeanDecreaseGini"],6))
+                            importance = round(importance_between[,"MeanDecreaseGini"],6))
 
 rankImportance_between <- varimportance_between %>%
   mutate(Rank = paste0('#', dense_rank(desc(importance))))
@@ -224,7 +224,7 @@ ggplot(rankImportance_between, aes(x = reorder(Variables, importance),y = import
   labs(x = "Variables") + 
   coord_flip() +
   theme_bw()
-
+  
 
 
 rf_m2 <- randomForest(as.factor(Subject_Type)~.,data = CNP_within_RF_subset, importance = TRUE, ntree= 500)
@@ -232,7 +232,7 @@ rf_m2 <- randomForest(as.factor(Subject_Type)~.,data = CNP_within_RF_subset, imp
 importance_within <- importance(rf_m2)
 
 varimportance_within <- data.frame(Variables= row.names(importance_within),
-                                   importance = round(importance_within[,"MeanDecreaseGini"],6))
+                            importance = round(importance_within[,"MeanDecreaseGini"],6))
 
 rankImportance_within <- varimportance_within %>%
   mutate(Rank = paste0('#', dense_rank(desc(importance))))
@@ -275,7 +275,7 @@ set.seed(1234)
 #delete duplicate entity
 
 delete_dup <- function(data){
-  is.null(remove)
+is.null(remove)
   remove <- c() 
   for(i in 1:length(subset)){
     result <- str_detect(subset[i],names(data))
@@ -464,7 +464,7 @@ cv.error <- function(data){
     test <- data[folds[[i]],]
     
     
-    logi_cv <-glm(Subject_Type~. , data = train, family = "binomial") 
+  logi_cv <-glm(Subject_Type~. , data = train, family = "binomial") 
     
     #Test
     predicted <- predict(logi_cv, test, type = "response")
