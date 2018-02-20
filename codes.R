@@ -1,0 +1,581 @@
+---
+  title: "project"
+author: "Brian Lin"
+date: "February 14, 2018"
+output: html_document
+---
+  ```{r}
+
+library(rJava)
+library(xlsx)
+library(stringr)
+library(dplyr)
+library(readr)
+library(randomForest)
+library(ggplot2)
+library(caret)
+
+setwd("A:/Winter 2018/Stats 141SL/project/")
+
+
+
+CNP_between <- read.table("CNP_between_nets.txt", header =  TRUE)
+CNP_within <- read.table("CNP_within_nets.txt", header = TRUE)
+CNPDemographic <- read.xlsx("CNPDemographicMeasures.xlsx", sheetName = "SNF")
+
+
+#Removed character string
+
+pattern <- "[a-z]*-"
+
+CNP_within$Subject_ID <- as.numeric(str_replace_all(CNP_within$Subject_ID 
+                                                    , pattern,""))
+
+CNP_between$Subject_ID <- as.numeric(str_replace_all(CNP_between$Subject_ID 
+                                                     , pattern,""))
+
+
+
+
+#Merge data
+CNP_within_merge <- left_join(CNP_within,CNPDemographic, by = c("Subject_ID" = "PTID"))
+
+#summary(CNP_within_merge)
+
+CNP_between_merge <- left_join(CNP_between,CNPDemographic, by = c("Subject_ID" = "PTID"))
+
+#summary(CNP_between_merge)
+
+
+#COBRE data
+
+
+COBRE_between <- read.table("COBRE_between_nets.txt", header = TRUE)
+
+COBRE_within <- read.table("COBRE_within_nets.txt", header = TRUE)
+
+
+
+#Revmove character string 
+
+COBRE_between$Subject_ID <- as.numeric(str_replace_all(COBRE_between$Subject_ID 
+                                                       , pattern,""))
+
+COBRE_within$Subject_ID <- as.numeric(str_replace_all(COBRE_within$Subject_ID 
+                                                      , pattern,""))
+
+
+
+COBREDemographic <- read.xlsx("COBRE INDI Additional data.xls", sheetName = "NP")
+
+#remove 00
+
+pattern <- "^00"
+
+COBREDemographic$ID <- as.numeric(str_replace_all(COBREDemographic$ID, pattern,""))
+
+
+#Merge data
+
+COBRE_within_merge <- left_join(COBRE_within,COBREDemographic, by = c("Subject_ID" = "ID"))
+
+
+#summary(COBRE_within_merge)
+
+COBRE_between_merge <- left_join(COBRE_between,COBREDemographic, by = c("Subject_ID" = "ID"))
+
+#summary(COBRE_between_merge)
+
+COBRE_phenotypic <- read_csv("COBRE_phenotypic_data.csv")
+
+
+COBRE_between_merge <- left_join(COBRE_between,COBRE_phenotypic, by = c("Subject_ID" = "X1"))
+COBRE_within_merge <- left_join(COBRE_within,COBRE_phenotypic, by = c("Subject_ID" = "X1"))
+
+table(COBRE_between_merge$Diagnosis)
+table(COBRE_within_merge$Diagnosis)
+
+
+
+
+
+
+#CNP filter
+
+
+CNP_within_merge <- CNP_within_merge %>%
+  filter(Subject_Type == "Control" | Subject_Type == "Schizophrenia")
+
+table(CNP_within_merge$Subject_Type)
+
+
+CNP_between_merge <- CNP_between_merge %>%
+  filter(Subject_Type == "Control" | Subject_Type == "Schizophrenia")
+
+table(CNP_between_merge$Subject_Type)
+
+
+
+
+#COBRE filter
+
+COBRE_between_merge <- COBRE_between_merge %>%
+  filter(!(Diagnosis == 290.3 | Diagnosis == 296.26 | Diagnosis == 296.4 | Diagnosis == 311))
+
+COBRE_within_merge <- COBRE_within_merge %>%
+  filter(!(Diagnosis == 290.3 | Diagnosis == 296.26 | Diagnosis == 296.4 | Diagnosis == 311))
+
+table(COBRE_between_merge$Diagnosis)
+table(COBRE_within_merge$Diagnosis)
+
+#Recoding Patients to Schizophrenia in COBRE
+
+
+pattern <- "Patient"
+
+COBRE_between_merge$Subject_Type <- str_replace_all(COBRE_between_merge$Subject_Type,  pattern,"Schizophrenia")
+COBRE_within_merge$Subject_Type <- str_replace_all(COBRE_within_merge$Subject_Type,  pattern,"Schizophrenia")
+
+table(COBRE_between_merge$Subject_Type)
+table(COBRE_within_merge$Subject_Type)
+
+
+CNP_between_merge$Subject_Type <- droplevels(CNP_between_merge$Subject_Type)
+levels(CNP_between_merge$Subject_Type)
+
+CNP_within_merge$Subject_Type <- droplevels(CNP_within_merge$Subject_Type)
+levels(CNP_within_merge$Subject_Type)
+
+#cor(COBRE_betwee)
+
+
+#summary(CNP_between_merge)
+
+
+
+#CNP between
+#remove 96:98, 112
+CNP_between_merge <- CNP_between_merge %>%
+  select(-c(96:98,112))
+
+
+
+#CNP within get rid of
+#75 #76 #91
+CNP_within_merge <- CNP_within_merge %>%
+  select(-c(75:77,91))
+
+
+#Merge both data into CNP
+
+CNP <- merge(CNP_between_merge,CNP_within_merge, all = TRUE)
+
+
+
+
+#imputation
+
+CNP_between_merge <- rfImpute(CNP_between_merge[,-c(3)], CNP_between_merge$Subject_Type, iter = 10, ntree = 500)
+
+CNP_within_merge <- rfImpute(CNP_within_merge [,-c(3)], CNP_within_merge $Subject_Type, iter = 10, ntree = 500)
+
+CNP <- rfImpute(CNP[,-c(3)], CNP$Subject_Type, iter = 10, ntree = 500)
+
+
+#Get rid of subject ID
+
+CNP_between_merge <- CNP_between_merge %>%
+  select(-c(1:2))
+
+CNP_within_merge <- CNP_within_merge %>%
+  select(-c(1:2))
+
+CNP <- CNP %>%
+  select(-c(1:2))
+
+
+#Use only the fMRI, MRI, and Age, keep global EFF
+
+CNP_between_RF_subset <- CNP_between_merge %>%
+  select(c(1:94, 107:113))
+
+CNP_within_RF_subset <- CNP_within_merge %>%
+  select(c(1:72, 86:92))
+
+CNP_RF_subset <- CNP %>%
+  select(-c(3:15))
+
+set.seed(1234)
+
+rf_m1 <- randomForest(as.factor(Subject_Type)~.,data = CNP_between_RF_subset, importance = TRUE, ntree= 500)
+
+importance_between <- importance(rf_m1)
+
+varimportance_between <- data.frame(Variables= row.names(importance_between),
+                                    importance = round(importance_between[,"MeanDecreaseGini"],6))
+
+rankImportance_between <- varimportance_between %>%
+  mutate(Rank = paste0('#', dense_rank(desc(importance))))
+
+ggplot(rankImportance_between, aes(x = reorder(Variables, importance),y = importance, fill = importance)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+            hjust = 0, vjust = 0.55, size = 4, colour = "red") +
+  labs(x = "Variables") + 
+  coord_flip() +
+  theme_bw()
+
+
+
+rf_m2 <- randomForest(as.factor(Subject_Type)~.,data = CNP_within_RF_subset, importance = TRUE, ntree= 500)
+
+importance_within <- importance(rf_m2)
+
+varimportance_within <- data.frame(Variables= row.names(importance_within),
+                                   importance = round(importance_within[,"MeanDecreaseGini"],6))
+
+rankImportance_within <- varimportance_within %>%
+  mutate(Rank = paste0('#', dense_rank(desc(importance))))
+
+ggplot(rankImportance_within, aes(x = reorder(Variables, importance),y = importance, fill = importance)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+            hjust = 0, vjust = 0.55, size = 4, colour = "red") +
+  labs(x = "Variables") + 
+  coord_flip() +
+  theme_bw()
+
+
+
+
+rf_m3 <- randomForest(as.factor(Subject_Type)~.,data = CNP_RF_subset, importance = TRUE, ntree= 500)
+
+importance <- importance(rf_m3)
+
+varimportance <- data.frame(Variables= row.names(importance),
+                            importance = round(importance[,"MeanDecreaseGini"],6))
+
+rankImportance <- varimportance %>%
+  mutate(Rank = paste0('#', dense_rank(desc(importance))))
+
+ggplot(rankImportance, aes(x = reorder(Variables, importance),y = importance, fill = importance)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+            hjust = 0, vjust = 0.55, size = 4, colour = "red") +
+  labs(x = "Variables") + 
+  coord_flip() +
+  theme_bw()
+```
+
+```{r}
+set.seed(1234)
+
+
+
+#delete duplicate entity
+
+delete_dup <- function(data){
+  is.null(remove)
+  remove <- c() 
+  for(i in 1:length(subset)){
+    result <- str_detect(subset[i],names(data))
+    for(j in 1:length(result)){
+      if(result[j]){
+        remove <- c(remove,i) 
+      }
+    }
+  }
+  if(is.null(remove))
+    return(subset)
+  subset <- subset[-c(remove)]
+  return(subset)
+}
+subset <- as.vector(varimportance_between$Variables[varimportance_between$importance >= 1.5])
+
+subset <- delete_dup(CNP_between_RF_subset[,c(1,95:101)])
+
+CNP_between_logi_subset <- CNP_between_RF_subset[,c("Subject_Type",names(CNP_between_RF_subset[,c(1,95:101)]), subset)]
+
+
+index <- sample(1:nrow(CNP_between_logi_subset), size = 110,replace = FALSE)
+
+CNP_between_train <- CNP_between_logi_subset[index,]
+CNP_between_test <- CNP_between_logi_subset[-index,]
+logi_m1 <-glm(Subject_Type~. , data = CNP_between_train, family = "binomial") 
+summary(logi_m1)
+round(exp(coef(logi_m1)),3)
+anova(logi_m1, test = "Chisq")
+
+
+#Train
+predicted <- predict(logi_m1, CNP_between_train, type = "response")
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_between_train$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+
+#Test
+predicted <- predict(logi_m1, CNP_between_test, type = "response")
+
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_between_test$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+
+
+#Within
+
+subset <- as.vector(varimportance_within$Variables[varimportance_within$importance >= 1.5])
+
+subset <- delete_dup(CNP_within_RF_subset[,c(1,73:79)])
+
+CNP_within_logi_subset <- CNP_within_RF_subset[,c("Subject_Type",names(CNP_within_RF_subset[,c(1,73:79)]), subset)]
+
+
+index <- sample(1:nrow(CNP_within_logi_subset), size = 110,replace = FALSE)
+
+CNP_within_train <- CNP_within_logi_subset[index,]
+CNP_within_test <- CNP_within_logi_subset[-index,]
+logi_m2 <-glm(Subject_Type~. , data = CNP_within_train, family = "binomial") 
+summary(logi_m2)
+round(exp(coef(logi_m2)),3)
+anova(logi_m2, test = "Chisq")
+
+
+#Train
+predicted <- predict(logi_m2, CNP_within_train, type = "response")
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_within_train$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+
+#Test
+predicted <- predict(logi_m2, CNP_within_test, type = "response")
+
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_within_test$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+
+
+
+
+#CNP
+
+subset <- as.vector(varimportance$Variables[varimportance$importance >= 1])
+
+subset <- delete_dup(CNP[,c(1,173:186)])
+
+CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type", names(CNP[,c(1,173:186)]), subset)]
+
+
+index <- sample(1:nrow(CNP_logi_subset), size = 110,replace = FALSE)
+
+CNP_train <- CNP_logi_subset[index,]
+CNP_test <- CNP_logi_subset[-index,]
+logi_m3 <-glm(Subject_Type~. , data = CNP_train, family = "binomial") 
+summary(logi_m3)
+round(exp(coef(logi_m3)),3)
+anova(logi_m3, test = "Chisq")
+
+
+#Train
+predicted <- predict(logi_m3, CNP_train, type = "response")
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_train$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+
+#Test
+predicted <- predict(logi_m3, CNP_test, type = "response")
+
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_test$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+```
+
+
+```{r eval=FALSE}
+set.seed(1234)
+
+#K fold K = 10
+
+cv.error <- function(data){
+  
+  #generate random seeds
+  r <- runif(1,0,9999)
+  set.seed(r)
+  folds <- createFolds(data[,1],k = 10)
+  Accuracy <- rep(NA,10)
+  
+  for(i in 1:10){
+    
+    #training and testing
+    train <- data[-folds[[i]],]
+    test <- data[folds[[i]],]
+    
+    
+    logi_cv <-glm(Subject_Type~. , data = train, family = "binomial") 
+    
+    #Test
+    predicted <- predict(logi_cv, test, type = "response")
+    for(j in 1:length(predicted)){
+      if(predicted[j] < 0.5){
+        predicted[j] <- "Control"
+      } else{
+        predicted[j] <- "Schizophrenia"
+      }
+    }
+    predicted <- as.factor(predicted)
+    levels(predicted) <- c("Control","Schizophrenia")
+    confuseion_matrix <- table(test$Subject_Type,predicted)
+    Accuracy[i] <- (confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+  }
+  return(Accuracy)
+}
+
+Accuracy.k <- cv.error(CNP_between_logi_subset)
+
+Accuracy.k
+mean(Accuracy.k)
+
+
+Accuracy.k <- cv.error(CNP_within_logi_subset)
+
+Accuracy.k
+mean(Accuracy.k)
+
+
+
+
+Accuracy.k <- cv.error(CNP_logi_subset)
+Accuracy.k
+mean(Accuracy.k)
+
+set.seed(1234)
+
+```
+
+```{r}
+
+
+#CNP All variables
+
+
+rf_m4 <- randomForest(as.factor(Subject_Type)~.,data = CNP, importance = TRUE, ntree= 500)
+
+importance <- importance(rf_m4)
+
+varimportance <- data.frame(Variables= row.names(importance),
+                            importance = round(importance[,"MeanDecreaseGini"],6))
+
+rankImportance <- varimportance %>%
+  mutate(Rank = paste0('#', dense_rank(desc(importance))))
+
+ggplot(rankImportance, aes(x = reorder(Variables, importance),y = importance, fill = importance)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+            hjust = 0, vjust = 0.55, size = 4, colour = "red") +
+  labs(x = "Variables") + 
+  coord_flip() +
+  theme_bw()
+
+
+#This allow more variable added in to the model.
+subset <- as.vector(varimportance$Variables[varimportance$importance >= 1.5])
+
+
+CNP_logi_subset <- CNP[,c("Age","Subject_Type", subset)]
+
+
+index <- sample(1:nrow(CNP_logi_subset), size = 110,replace = FALSE)
+
+CNP_train <- CNP_logi_subset[index,]
+CNP_test <- CNP_logi_subset[-index,]
+logi_m4 <-glm(Subject_Type~. , data = CNP_train, family = "binomial") 
+summary(logi_m4)
+round(exp(coef(logi_m4)),4)
+anova(logi_m4, test = "Chisq")
+
+
+#Train
+predicted <- predict(logi_m4, CNP_train, type = "response")
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_train$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+
+#Test
+predicted <- predict(logi_m4, CNP_test, type = "response")
+
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_test$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+```
+
