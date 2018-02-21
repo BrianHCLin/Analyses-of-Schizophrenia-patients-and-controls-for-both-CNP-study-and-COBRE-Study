@@ -11,7 +11,7 @@ library(xlsx)
 library(stringr)
 library(dplyr)
 library(readr)
-library(randomForest)
+library(randomForestSRC)
 library(ggplot2)
 library(caret)
 
@@ -172,38 +172,28 @@ CNP <- merge(CNP_between_merge,CNP_within_merge, all = TRUE)
 
 
 
-
-#imputation
-
-CNP_between_merge <- rfImpute(CNP_between_merge[,-c(3)], CNP_between_merge$Subject_Type, iter = 10, ntree = 500)
-
-CNP_within_merge <- rfImpute(CNP_within_merge [,-c(3)], CNP_within_merge $Subject_Type, iter = 10, ntree = 500)
-
-CNP <- rfImpute(CNP[,-c(3)], CNP$Subject_Type, iter = 10, ntree = 500)
-
-
 #Get rid of subject ID
 
 CNP_between_merge <- CNP_between_merge %>%
-  select(-c(1:2))
+  select(-c(1))
 
 CNP_within_merge <- CNP_within_merge %>%
-  select(-c(1:2))
+  select(-c(1))
 
 CNP <- CNP %>%
-  select(-c(1:2))
+  select(-c(1))
 
 
 #Use only the fMRI, MRI, and Age, keep global EFF
 
 CNP_between_RF_subset <- CNP_between_merge %>%
-  select(c(1:94, 107:113))
+  select(c(1:94, 108:114))
 
 CNP_within_RF_subset <- CNP_within_merge %>%
-  select(c(1:72, 86:92))
+  select(c(1:72, 87:93))
 
 CNP_RF_subset <- CNP %>%
-  select(-c(3:15))
+  select(-c(4:16, 24:40))
 
 set.seed(1234)
 
@@ -248,23 +238,96 @@ ggplot(rankImportance_within, aes(x = reorder(Variables, importance),y = importa
 
 
 
-rf_m3 <- randomForest(as.factor(Subject_Type)~.,data = CNP_RF_subset, importance = TRUE, ntree= 500)
 
-importance <- importance(rf_m3)
+rfsrc_m3 <- rfsrc(as.factor(Subject_Type)~.,data = CNP_RF_subset, na.action = c("na.omit"), ntree= 1000)
+max_var <- max.subtree(rfsrc_m3, conservative = TRUE)
+max_var$topvars
 
-varimportance <- data.frame(Variables= row.names(importance),
-                            importance = round(importance[,"MeanDecreaseGini"],6))
+#delete duplicate entity
 
-rankImportance <- varimportance %>%
-  mutate(Rank = paste0('#', dense_rank(desc(importance))))
+delete_dup <- function(subset, data){
+  remove <- c() 
+  for(i in 1:length(subset)){
+    result <- str_detect(subset[i],names(data))
+    for(j in 1:length(result)){
+      if(result[j]){
+        remove <- c(remove,i) 
+      }
+    }
+  }
+  if(is.null(remove))
+    return(subset)
+  subset <- subset[-c(remove)]
+  return(subset)
+}
 
-ggplot(rankImportance, aes(x = reorder(Variables, importance),y = importance, fill = importance)) +
-  geom_bar(stat = "identity") +
-  geom_text(aes(x = Variables, y = 0.5, label = Rank),
-            hjust = 0, vjust = 0.55, size = 4, colour = "red") +
-  labs(x = "Variables") + 
-  coord_flip() +
-  theme_bw()
+
+subset <- as.vector(max_var$topvars)
+
+subset <- delete_dup(subset,CNP_RF_subset[,c(1,4:10)])
+
+CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type",names(CNP_RF_subset[,c(1,4:10)]), subset)]
+
+
+
+#Using a previously grown forest, identify pairwise interactions for all pairs of variables from a specified list. There are two distinct approaches specified by the option method.
+
+#method="maxsubtree"
+
+#This invokes a maximal subtree analysis. In this case, a matrix is returned where entries [i][i] are the normalized minimal depth of variable [i] relative to the root node (normalized wrt the size of the tree) and entries [i][j] indicate the normalized minimal depth of a variable [j] wrt the maximal subtree for variable [i] (normalized wrt the size of [i]'s maximal subtree). Smaller [i][i] entries indicate predictive variables. Small [i][j] entries having small [i][i] entries are a sign of an interaction between variable i and j (note: the user should scan rows, not columns, for small entries). See Ishwaran et al. (2010, 2011) for more details.
+
+#method="vimp"
+
+#This invokes a joint-VIMP approach. Two variables are paired and their paired VIMP calculated (refered to as 'Paired' importance). The VIMP for each separate variable is also calculated. The sum of these two values is refered to as 'Additive' importance. A large positive or negative difference between 'Paired' and 'Additive' indicates an association worth pursuing if the univariate VIMP for each of the paired-variables is reasonably large. See Ishwaran (2007) for more details.
+
+
+
+find.interaction(rfsrc_m3, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted = FALSE)
+find.interaction(rfsrc_m3, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted = FALSE, method = "vimp")
+
+CNP_logi_subset <- na.omit(CNP_logi_subset)
+
+index <- sample(1:nrow(CNP_logi_subset), size = 110,replace = FALSE)
+
+CNP_train <- CNP_logi_subset[index,]
+CNP_test <- CNP_logi_subset[-index,]
+logi_m3 <-glm(Subject_Type~. , data = CNP_train, family = "binomial") 
+summary(logi_m3)
+round(exp(coef(logi_m3)),3)
+anova(logi_m3, test = "Chisq")
+
+
+#Train
+predicted <- predict(logi_m3, CNP_train, type = "response")
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_train$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+
+#Test
+predicted <- predict(logi_m3, CNP_test, type = "response")
+
+for(i in 1:length(predicted)){
+  if(predicted[i] < 0.5){
+    predicted[i] <- "Control"
+  } else{
+    predicted[i] <- "Schizophrenia"
+  }
+}
+
+
+confuseion_matrix <- table(CNP_test$Subject_Type,predicted)
+
+(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+
 ```
 
 ```{r}
@@ -504,78 +567,3 @@ mean(Accuracy.k)
 set.seed(1234)
 
 ```
-
-```{r}
-
-
-#CNP All variables
-
-
-rf_m4 <- randomForest(as.factor(Subject_Type)~.,data = CNP, importance = TRUE, ntree= 500)
-
-importance <- importance(rf_m4)
-
-varimportance <- data.frame(Variables= row.names(importance),
-                            importance = round(importance[,"MeanDecreaseGini"],6))
-
-rankImportance <- varimportance %>%
-  mutate(Rank = paste0('#', dense_rank(desc(importance))))
-
-ggplot(rankImportance, aes(x = reorder(Variables, importance),y = importance, fill = importance)) +
-  geom_bar(stat = "identity") +
-  geom_text(aes(x = Variables, y = 0.5, label = Rank),
-            hjust = 0, vjust = 0.55, size = 4, colour = "red") +
-  labs(x = "Variables") + 
-  coord_flip() +
-  theme_bw()
-
-
-#This allow more variable added in to the model.
-subset <- as.vector(varimportance$Variables[varimportance$importance >= 1.5])
-
-
-CNP_logi_subset <- CNP[,c("Age","Subject_Type", subset)]
-
-
-index <- sample(1:nrow(CNP_logi_subset), size = 110,replace = FALSE)
-
-CNP_train <- CNP_logi_subset[index,]
-CNP_test <- CNP_logi_subset[-index,]
-logi_m4 <-glm(Subject_Type~. , data = CNP_train, family = "binomial") 
-summary(logi_m4)
-round(exp(coef(logi_m4)),4)
-anova(logi_m4, test = "Chisq")
-
-
-#Train
-predicted <- predict(logi_m4, CNP_train, type = "response")
-for(i in 1:length(predicted)){
-  if(predicted[i] < 0.5){
-    predicted[i] <- "Control"
-  } else{
-    predicted[i] <- "Schizophrenia"
-  }
-}
-
-
-confuseion_matrix <- table(CNP_train$Subject_Type,predicted)
-
-(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
-
-#Test
-predicted <- predict(logi_m4, CNP_test, type = "response")
-
-for(i in 1:length(predicted)){
-  if(predicted[i] < 0.5){
-    predicted[i] <- "Control"
-  } else{
-    predicted[i] <- "Schizophrenia"
-  }
-}
-
-
-confuseion_matrix <- table(CNP_test$Subject_Type,predicted)
-
-(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
-```
-
