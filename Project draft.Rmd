@@ -437,6 +437,8 @@ mean(Accuracy.k)
 ```{r warning = FALSE}
 #COBRE SECTION
 
+set.seed(4321)
+
 COBRE <- merge(COBRE_between_merge, COBRE_within_merge, all = TRUE)
 
 
@@ -448,7 +450,6 @@ COBRE_RF_subset$Subject_Type <- as.factor(COBRE_RF_subset$Subject_Type)
 rfsrc_m4 <- rfsrc(Subject_Type~.,data = COBRE_RF_subset, na.action = c("na.omit"), ntree= 1000)
 
 
-#Convervative removed all the predictor
 max_var <- max.subtree(rfsrc_m4, conservative = TRUE)
 max_var$topvars
 #delete duplicate entity
@@ -461,7 +462,7 @@ subset <- delete_dup(subset,COBRE_RF_subset[,c(1,137:150)])
 COBRE_logi_subset <- COBRE_RF_subset[,c("Subject_Type",names(COBRE_RF_subset[,c(1,137:150)]), subset)]
 
 
-find.interaction(rfsrc_m4, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE)
+#find.interaction(rfsrc_m4, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE)
 #find.interaction(rfsrc_m4, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE, method = "vimp")
 
 COBRE_logi_subset <- na.omit(COBRE_logi_subset)
@@ -494,16 +495,16 @@ accuracy_info <- AccuracyCutoffInfo( train = COBRE_train, test = COBRE_test,
 accuracy_info$plot
 
 
-Classify(COBRE_train, COBRE_train$prediction,"Subject_Type", 0.35)
+Classify(COBRE_train, COBRE_train$prediction,"Subject_Type", 0.45)
 
-Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.35)
+Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.45)
 
 ```
 
 ```{r warning = FALSE}
 set.seed(1234)
 
-Accuracy.k <- cv.error(COBRE_logi_subset, "Subject_Type", cut_off = 0.35)
+Accuracy.k <- cv.error(COBRE_logi_subset, "Subject_Type", cut_off = 0.45)
 Accuracy.k
 mean(Accuracy.k)
 ```
