@@ -7,9 +7,79 @@ editor_options:
   chunk_output_type: console
 ---
 
+```{r warning= FALSE}
+library(rJava, warn.conflicts = FALSE, quietly=TRUE)
+library(xlsx, warn.conflicts = FALSE, quietly=TRUE)
+library(stringr, warn.conflicts = FALSE, quietly=TRUE)
+library(dplyr, warn.conflicts = FALSE, quietly=TRUE)
+library(readr, warn.conflicts = FALSE, quietly=TRUE)
+library(randomForestSRC, warn.conflicts = FALSE, quietly=TRUE)
+library(ggplot2, warn.conflicts = FALSE, quietly=TRUE)
+library(caret, warn.conflicts = FALSE, quietly=TRUE)
+library(tidyr, warn.conflicts = FALSE, quietly=TRUE)
+library(scales, warn.conflicts = FALSE, quietly=TRUE)
+library(data.table, warn.conflicts = FALSE, quietly=TRUE)
+```
 
-```{r}
+
+
+```{r, warning = FALSE}
 #Functions
+
+
+#The AccuracyCutoffInfo function is a modified version of codes from the following github page
+#https://github.com/ethen8181/machine-learning/blob/master/unbalanced/unbalanced_code/unbalanced_functions.R
+#All Credit to user ethen8181
+
+
+# ------------------------------------------------------------------------------------------
+# [AccuracyCutoffInfo] : 
+# Obtain the accuracy on the trainining and testing dataset.
+# for cutoff value ranging from .4 to .8 ( with a .05 increase )
+# @train   : your data.table or data.frame type training data ( assumes you have the predicted score in it ).
+# @test    : your data.table or data.frame type testing data
+# @predict : prediction's column name (assumes the same for training and testing set)
+# @actual  : actual results' column name
+# returns  : 1. data : a data.table with three columns.
+#            		   each row indicates the cutoff value and the accuracy for the 
+#            		   train and test set respectively.
+# 			 2. plot : plot that visualizes the data.table
+
+AccuracyCutoffInfo <- function( train, test, predict, actual )
+{
+	# change the cutoff value's range as you please 
+	cutoff <- seq( .05, 1, by = .025 )
+
+	accuracy <- lapply( cutoff, function(c)
+	{
+	  levels(test[[actual]]) <- c(0,1)
+	  levels(train[[actual]]) <- c(0,1)
+		# use the confusionMatrix from the caret package
+		cm_train <- confusionMatrix( as.numeric( train[[predict]] > c ), train[[actual]] )
+		cm_test  <- confusionMatrix( as.numeric( test[[predict]]  > c ), test[[actual]] )
+			
+		dt <- data.table( cutoff = c,
+						  train  = cm_train$overall[["Accuracy"]],
+		 			      test   = cm_test$overall[["Accuracy"]] )
+		return(dt)
+	}) %>% rbindlist()
+
+	# visualize the accuracy of the train and test set for different cutoff value 
+	# accuracy in percentage.
+	accuracy_long <- gather( accuracy, "data", "accuracy", -1 )
+	
+	plot <- ggplot( accuracy_long, aes( cutoff, accuracy, group = data, color = data ) ) + 
+			geom_line( size = 1 ) + geom_point( size = 3 ) +
+			scale_y_continuous( label = percent ) +
+			ggtitle( "Train/Test Accuracy for Different Cutoff" ) +
+	    scale_x_continuous(breaks=seq(0, 1, 0.1)) +
+	    theme_bw()
+
+	return( list( data = accuracy, plot = plot ) )
+}
+
+
+#----------------------
 
 #delete_dup
 
@@ -33,15 +103,46 @@ delete_dup <- function(subset, data){
 }
 
 
+#data = data file 
+#Predition: predicted result
+#response: The name of response variable 
+#cut_off: probabilty cut off point
+
+Classify <- function(data, prediction,response, cut_off ){
+  for(i in 1:length(prediction)){
+    if(prediction[i] < cut_off){
+      prediction[i] <- levels(data[[response]])[1]
+    } else{
+      prediction[i] <- levels(data[[response]])[2]
+    }
+  }
+  
+  prediction <- as.factor(prediction)
+  levels(prediction) <- c(levels(data[[response]])[1],levels(data[[response]])[2])
+  confuseion_matrix <- table(data[[response]],prediction)
+  print(confuseion_matrix)
+  Accuracy <- (confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+  return(print(paste("The accuracy is", round(Accuracy*100,3),"%")))
+}
+
+
 
 #K fold K = 10
 
-cv.error <- function(data){
+#data = data using for prediction
+#response = name of the response variable
+#cut off = probability cut off point
+#interaction = you can type addition interaction term in text
+#Example 
+#cv.error(CNP_logi_subset,"Subject_Type","+Age*Auditory.global_eff", 0.8)
+
+
+cv.error <- function(data, response, interaction = "", cut_off = 0.5){
   
   #generate random seeds
   r <- runif(1,0,9999)
   set.seed(r)
-  folds <- createFolds(data[,1],k = 10)
+  folds <- createFolds(data[[response]],k = 10)
   Accuracy <- rep(NA,10)
   
   for(i in 1:10){
@@ -50,38 +151,30 @@ cv.error <- function(data){
     train <- data[-folds[[i]],]
     test <- data[folds[[i]],]
     
+    levels(test[[response]]) <- c(levels(data[[response]])[1],levels(data[[response]])[2])
     
-  logi_cv <-glm(Subject_Type~. , data = train, family = "binomial") 
+    logi_cv <-glm(paste(response,"~.",interaction), data = train, family = "binomial") 
     
-    #Test
-    predicted <- predict(logi_cv, test, type = "response")
-    for(j in 1:length(predicted)){
-      if(predicted[j] < 0.5){
-        predicted[j] <- "Control"
+    prediction <- predict(logi_cv, test, type = "response")
+    for(j in 1:length(prediction)){
+      if(prediction[j] < cut_off){
+        prediction[j] <- levels(test[[response]])[1]
       } else{
-        predicted[j] <- "Schizophrenia"
+        prediction[j] <- levels(test[[response]])[2]
       }
     }
-    predicted <- as.factor(predicted)
-    levels(predicted) <- c("Control","Schizophrenia")
-    confuseion_matrix <- table(test$Subject_Type,predicted)
+    prediction <- as.factor(prediction)
+    levels(prediction) <- c(levels(data[[response]])[1],levels(data[[response]])[2])
+    
+    confuseion_matrix <- table(test[[response]],prediction)
     Accuracy[i] <- (confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
   }
   return(Accuracy)
 }
 ```
 
+```{r warning = FALSE}
 
-```{r}
-
-library(rJava)
-library(xlsx)
-library(stringr)
-library(dplyr)
-library(readr)
-library(randomForestSRC)
-library(ggplot2)
-library(caret)
 
 setwd("A:/Winter 2018/Stats 141SL/project/")
 
@@ -305,45 +398,32 @@ anova(logi_m3, test = "Chisq")
 
 
 #Train
-predicted <- predict(logi_m3, CNP_train, type = "response")
-for(i in 1:length(predicted)){
-  if(predicted[i] < 0.5){
-    predicted[i] <- "Control"
-  } else{
-    predicted[i] <- "Schizophrenia"
-  }
-}
+CNP_train$prediction <- predict(logi_m3, CNP_train, type = "response")
 
-
-confuseion_matrix <- table(CNP_train$Subject_Type,predicted)
-
-(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
 
 #Test
-predicted <- predict(logi_m3, CNP_test, type = "response")
+CNP_test$prediction <- predict(logi_m3, CNP_test, type = "response")
 
-for(i in 1:length(predicted)){
-  if(predicted[i] < 0.5){
-    predicted[i] <- "Control"
-  } else{
-    predicted[i] <- "Schizophrenia"
-  }
-}
+prop.table(table(CNP$Subject_Type))
+
+accuracy_info <- AccuracyCutoffInfo( train = CNP_train, test = CNP_test, 
+                                     predict = "prediction", actual = "Subject_Type" )
+
+accuracy_info$plot
 
 
-confuseion_matrix <- table(CNP_test$Subject_Type,predicted)
+Classify(CNP_train, CNP_train$prediction,"Subject_Type", 0.8 )
 
-(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+Classify(CNP_test, CNP_test$prediction,"Subject_Type", 0.8 )
 
 ```
 
 
 
-```{r eval=FALSE}
-set.seed(1234)
+```{r warning = FALSE}
 
 
-Accuracy.k <- cv.error(CNP_logi_subset)
+Accuracy.k <- cv.error(CNP_logi_subset, "Subject_Type",cut_off = 0.8)
 Accuracy.k
 mean(Accuracy.k)
 
@@ -353,7 +433,8 @@ mean(Accuracy.k)
 
 
 
-```{r}
+
+```{r warning = FALSE}
 #COBRE SECTION
 
 COBRE <- merge(COBRE_between_merge, COBRE_within_merge, all = TRUE)
@@ -368,7 +449,7 @@ rfsrc_m4 <- rfsrc(Subject_Type~.,data = COBRE_RF_subset, na.action = c("na.omit"
 
 
 #Convervative removed all the predictor
-max_var <- max.subtree(rfsrc_m4, conservative = FALSE)
+max_var <- max.subtree(rfsrc_m4, conservative = TRUE)
 max_var$topvars
 #delete duplicate entity
 
@@ -398,42 +479,31 @@ anova(logi_m4, test = "Chisq")
 
 
 #Train
-predicted <- predict(logi_m4, COBRE_train, type = "response")
-for(i in 1:length(predicted)){
-  if(predicted[i] < 0.5){
-    predicted[i] <- "Control"
-  } else{
-    predicted[i] <- "Schizophrenia"
-  }
-}
+COBRE_train$prediction <- predict(logi_m4, COBRE_train, type = "response")
 
-
-confuseion_matrix <- table(COBRE_train$Subject_Type,predicted)
-
-(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
 
 #Test
-predicted <- predict(logi_m4, COBRE_test, type = "response")
+COBRE_test$prediction <- predict(logi_m4, COBRE_test, type = "response")
 
-for(i in 1:length(predicted)){
-  if(predicted[i] < 0.5){
-    predicted[i] <- "Control"
-  } else{
-    predicted[i] <- "Schizophrenia"
-  }
-}
+prop.table(table(COBRE$Subject_Type))
 
 
-confuseion_matrix <- table(COBRE_test$Subject_Type,predicted)
+accuracy_info <- AccuracyCutoffInfo( train = COBRE_train, test = COBRE_test, 
+                                     predict = "prediction", actual = "Subject_Type" )
 
-(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+accuracy_info$plot
+
+
+Classify(COBRE_train, COBRE_train$prediction,"Subject_Type", 0.35)
+
+Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.35)
 
 ```
 
-```{r}
+```{r warning = FALSE}
 set.seed(1234)
 
-Accuracy.k <- cv.error(COBRE_logi_subset)
+Accuracy.k <- cv.error(COBRE_logi_subset, "Subject_Type", cut_off = 0.35)
 Accuracy.k
 mean(Accuracy.k)
 ```
@@ -441,7 +511,7 @@ mean(Accuracy.k)
 
 
 
-```{r}
+```{r warning = FALSE}
 #combine 
 Study <- rep("CNP",nrow(CNP))
 
@@ -522,44 +592,34 @@ round(exp(coef(logi_m5)),3)
 anova(logi_m5, test = "Chisq")
 
 
+
 #Train
-predicted <- predict(logi_m5, Data_train, type = "response")
-for(i in 1:length(predicted)){
-  if(predicted[i] < 0.5){
-    predicted[i] <- "CNP"
-  } else{
-    predicted[i] <- "COBRE"
-  }
-}
+Data_train$prediction <- predict(logi_m5, Data_train, type = "response")
 
-
-confuseion_matrix <- table(Data_train$Study,predicted)
-
-(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
 
 #Test
-predicted <- predict(logi_m5, Data_test, type = "response")
+Data_test$prediction <- predict(logi_m5, Data_test, type = "response")
 
-for(i in 1:length(predicted)){
-  if(predicted[i] < 0.5){
-    predicted[i] <- "CNP"
-  } else{
-    predicted[i] <- "COBRE"
-  }
-}
+prop.table(table(COBRE$Subject_Type))
 
 
-confuseion_matrix <- table(Data_test$Study,predicted)
+accuracy_info <- AccuracyCutoffInfo( train = Data_train, test = Data_test, 
+                                     predict = "prediction", actual = "Study" )
 
-(confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+accuracy_info$plot
+
+
+Classify(Data_train, Data_train$prediction,"Study", 0.5)
+
+Classify(Data_test, Data_test$prediction,"Study", 0.5)
 
 
 ```
 
-```{r}
-#set.seed(1234)
+```{r warning = FALSE}
+set.seed(1234)
 
-Accuracy.k <- cv.error(Data_logi)
+Accuracy.k <- cv.error(Data_logi, "Study", cut_off = 0.5)
 Accuracy.k
 mean(Accuracy.k)
 ```
