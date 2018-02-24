@@ -408,6 +408,13 @@ find.interaction(rfsrc_m3, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted =
 
 CNP_logi_subset <- na.omit(CNP_logi_subset)
 
+
+
+#Correlation
+high_cor <- findCorrelation(cor(CNP_logi_subset[,-c(1:2)]),cutoff = 0.75) + 2
+
+#No potential collinearly problem 
+
 index <- sample(1:nrow(CNP_logi_subset), size = round(nrow(CNP_logi_subset)*0.7,0),replace = FALSE)
 
 CNP_train <- CNP_logi_subset[index,]
@@ -496,6 +503,11 @@ find.interaction(rfsrc_m4, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted
 
 
 COBRE_logi_subset <- na.omit(COBRE_logi_subset)
+
+#Correlation
+high_cor <- findCorrelation(cor(COBRE_logi_subset[,-c(1:2)]),cutoff = 0.75) + 2
+
+#No potential collinearly problem
 
 
 index <- sample(1:nrow(COBRE_logi_subset), size = round(nrow(COBRE_logi_subset)*0.7,0),replace = FALSE)
@@ -598,6 +610,8 @@ Data <- merge(CNP,COBRE, all = TRUE) %>%
 
 
 ```{r}
+set.seed(4321)
+
 # Combine Data modeling
 
 
@@ -622,8 +636,15 @@ subset <- delete_dup(subset,Data[,c(1:5,139:152)])
 
 Data_logi <- Data[,c("Study",names(Data[,c(1:5,139:152)]), subset)]
 
-
 Data_logi <- na.omit(Data_logi)
+
+#check correlation
+
+high_cor <- findCorrelation(cor(Data_logi[,-c(1,3:4)]),cutoff = 0.75) + 3
+
+#Remove variables to prevent collinearly problem
+Data_logi <- Data_logi %>%
+  select(-c(high_cor))
 
 index <- sample(1:nrow(Data_logi), size = round(nrow(Data_logi)*0.7,0),replace = FALSE)
 
