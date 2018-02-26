@@ -369,7 +369,7 @@ CNP_RF_subset <- CNP %>%
 ```{r}
 #CNP data modeling 
 
-set.seed(1234)
+set.seed(4321)
 
 
 rfsrc_m3 <- rfsrc(as.factor(Subject_Type)~.,data = CNP_RF_subset, na.action = c("na.omit"), ntree= 1000)
@@ -410,10 +410,10 @@ CNP_logi_subset <- na.omit(CNP_logi_subset)
 
 
 
-#Correlation
+#Correlation check
 high_cor <- findCorrelation(cor(CNP_logi_subset[,-c(1:2)]),cutoff = 0.75) + 2
 
-#No potential collinearly problem 
+#No potential multicollinearity problem 
 
 index <- sample(1:nrow(CNP_logi_subset), size = round(nrow(CNP_logi_subset)*0.7,0),replace = FALSE)
 
@@ -424,6 +424,10 @@ summary(logi_m3)
 round(exp(coef(logi_m3)),3)
 anova(logi_m3, test = "Chisq")
 
+#R-squared
+
+R_squared <- 1 - (summary(logi_m3)[[4]]/summary(logi_m3)[[8]])
+R_squared
 
 #70/30 CV check
 
@@ -442,9 +446,9 @@ accuracy_info <- AccuracyCutoffInfo( train = CNP_train, test = CNP_test,
 accuracy_info$plot
 
 
-Classify(CNP_train, CNP_train$prediction,"Subject_Type", 0.8 )
+Classify(CNP_train, CNP_train$prediction,"Subject_Type", 0.75 )
 
-Classify(CNP_test, CNP_test$prediction,"Subject_Type", 0.8 )
+Classify(CNP_test, CNP_test$prediction,"Subject_Type", 0.75 )
 
 ```
 
@@ -452,9 +456,9 @@ Classify(CNP_test, CNP_test$prediction,"Subject_Type", 0.8 )
 
 ```{r warning = FALSE}
 #CNP model k fold CV check
-set.seed(1234)
+set.seed(4321)
 
-Accuracy.k <- cv.error(CNP_logi_subset, "Subject_Type",cut_off = 0.8)
+Accuracy.k <- cv.error(CNP_logi_subset, "Subject_Type",cut_off = 0.75)
 Accuracy.k
 mean(Accuracy.k)
 
@@ -504,10 +508,10 @@ find.interaction(rfsrc_m4, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted
 
 COBRE_logi_subset <- na.omit(COBRE_logi_subset)
 
-#Correlation
+#Correlation check
 high_cor <- findCorrelation(cor(COBRE_logi_subset[,-c(1:2)]),cutoff = 0.75) + 2
 
-#No potential collinearly problem
+#No potential multicollinearity problem
 
 
 index <- sample(1:nrow(COBRE_logi_subset), size = round(nrow(COBRE_logi_subset)*0.7,0),replace = FALSE)
@@ -518,6 +522,11 @@ logi_m4 <-glm(Subject_Type~. , data = COBRE_train, family = "binomial")
 summary(logi_m4)
 round(exp(coef(logi_m4)),3)
 anova(logi_m4, test = "Chisq")
+
+
+#R-squared
+R_squared <- 1 - (summary(logi_m4)[[4]]/summary(logi_m4)[[8]])
+R_squared
 
 #70/30 CV check
 
@@ -537,9 +546,9 @@ accuracy_info <- AccuracyCutoffInfo( train = COBRE_train, test = COBRE_test,
 accuracy_info$plot
 
 
-Classify(COBRE_train, COBRE_train$prediction,"Subject_Type", 0.45)
+Classify(COBRE_train, COBRE_train$prediction,"Subject_Type", 0.425)
 
-Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.45)
+Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.425)
 
 ```
 
@@ -548,9 +557,9 @@ Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.45)
 ```{r warning = FALSE}
 #COBRE model k fold CV check
 
-set.seed(1234)
+set.seed(4321)
 
-Accuracy.k <- cv.error(COBRE_logi_subset, "Subject_Type", cut_off = 0.45)
+Accuracy.k <- cv.error(COBRE_logi_subset, "Subject_Type", cut_off = 0.425)
 Accuracy.k
 mean(Accuracy.k)
 ```
@@ -642,7 +651,7 @@ Data_logi <- na.omit(Data_logi)
 
 high_cor <- findCorrelation(cor(Data_logi[,-c(1,3:4)]),cutoff = 0.75) + 3
 
-#Remove variables to prevent collinearly problem
+#Remove variables to prevent multicollinearity problem
 Data_logi <- Data_logi %>%
   select(-c(high_cor))
 
@@ -654,6 +663,12 @@ logi_m5 <-glm(Study~. + Subject_Type*Age , data = Data_train, family = "binomial
 summary(logi_m5)
 round(exp(coef(logi_m5)),3)
 anova(logi_m5, test = "Chisq")
+
+
+#R-squared
+
+R_squared <- 1 - (summary(logi_m5)[[4]]/summary(logi_m5)[[8]])
+R_squared
 
 #Effect plot
 plot(Effect(c("Subject_Type", "Age"), logi_m5),ask = FALSE)
@@ -686,7 +701,7 @@ Classify(Data_test, Data_test$prediction,"Study", 0.5)
 
 ```{r warning = FALSE}
 #Combine data model k fold CV check
-set.seed(1234)
+set.seed(4321)
 
 Accuracy.k <- cv.error(Data_logi, "Study", cut_off = 0.5)
 Accuracy.k
