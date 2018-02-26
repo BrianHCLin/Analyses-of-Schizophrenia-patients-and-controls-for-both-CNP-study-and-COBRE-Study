@@ -2,8 +2,10 @@
 title: "project"
 author: "Brian Lin"
 date: "February 14, 2018"
-output: html_document
-editor_options: 
+output:
+  pdf_document: default
+  html_document: default
+editor_options:
   chunk_output_type: console
 ---
 
@@ -201,12 +203,13 @@ COBRE_within <- read.table("COBRE_within_nets.txt", header = TRUE)
 
 COBREDemographic <- read.xlsx("COBRE INDI Additional data.xls", sheetName = "NP")
 
+COBRE_phenotypic <- read_csv("COBRE_phenotypic_data.csv")
+
+
 ```
 
 ```{r}
 #Data cleaning process
-
-
 
 #Removed character string
 
@@ -251,8 +254,6 @@ pattern <- "^00"
 COBREDemographic$ID <- as.numeric(str_replace_all(COBREDemographic$ID, pattern,""))
 
 
-
-
 #Merge data
 
 COBRE_within_merge <- left_join(COBRE_within,COBREDemographic, by = c("Subject_ID" = "ID"))
@@ -263,8 +264,6 @@ COBRE_within_merge <- left_join(COBRE_within,COBREDemographic, by = c("Subject_I
 COBRE_between_merge <- left_join(COBRE_between,COBREDemographic, by = c("Subject_ID" = "ID"))
 
 #summary(COBRE_between_merge)
-
-COBRE_phenotypic <- read_csv("COBRE_phenotypic_data.csv")
 
 COBRE_phenotypic$Gender <- as.factor(COBRE_phenotypic$Gender)
 
