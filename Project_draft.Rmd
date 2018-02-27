@@ -22,8 +22,9 @@ library(tidyr, warn.conflicts = FALSE, quietly=TRUE)
 library(scales, warn.conflicts = FALSE, quietly=TRUE)
 library(data.table, warn.conflicts = FALSE, quietly=TRUE)
 library(effects, warn.conflicts = FALSE, quietly=TRUE )
-```
+library(gridExtra, warn.conflicts = FALSE, quietly=TRUE )
 
+```
 
 
 ```{r, warning = FALSE}
@@ -183,15 +184,14 @@ cv.error <- function(data, response, interaction = "", cut_off = 0.5){
 
 #Standardized variable
 
-Standarize <- function(Data){
-  for(i in 1:ncol(Data)){
-    if(is.numeric(Data[1,i])){
-      Data[,i] <- (Data[,i] - mean(Data[,i]))/sd(Data[,i]) 
+Standarize <- function(data){
+  for(i in 1:ncol(data)){
+    if(is.numeric(data[1,i])){
+      data[,i] <- (data[,i] - mean(data[,i]))/sd(data[,i]) 
     }
   }
-  return(Data)
+  return(data)
 }
-
 
 ```
 
@@ -385,9 +385,9 @@ CNP_RF_subset <- CNP %>%
 set.seed(4321)
 
 
-rfsrc_m3 <- rfsrc(as.factor(Subject_Type)~.,data = CNP_RF_subset, na.action = c("na.omit"), ntree= 1000)
+rfsrc_m1 <- rfsrc(as.factor(Subject_Type)~.,data = CNP_RF_subset, na.action = c("na.omit"), ntree= 1000)
 
-max_var <- max.subtree(rfsrc_m3, conservative = TRUE)
+max_var <- max.subtree(rfsrc_m1, conservative = TRUE)
 max_var$topvars
 #delete duplicate entity
 
@@ -413,15 +413,14 @@ CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type",names(CNP_RF_subset[,c(1,137:
 #This invokes a joint-VIMP approach. Two variables are paired and their paired VIMP calculated (refered to as 'Paired' importance). The VIMP for each separate variable is also calculated. The sum of these two values is refered to as 'Additive' importance. A large positive or negative difference between 'Paired' and 'Additive' indicates an association worth pursuing if the univariate VIMP for each of the paired-variables is reasonably large. See Ishwaran (2007) for more details.
 
 
-
-#Find interaction
-find.interaction(rfsrc_m3, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted = FALSE)
-
 #No interactioin fund base on the result, we don't have to add interaction term
 
 CNP_logi_subset <- na.omit(CNP_logi_subset) %>%
   Standarize()
 
+#Find interaction
+find.interaction(rfsrc_m1, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted = FALSE)
+#find.interaction(rfsrc_m1, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted = FALSE, method = "vimp")
 
 
 #Correlation check
@@ -433,24 +432,24 @@ index <- sample(1:nrow(CNP_logi_subset), size = round(nrow(CNP_logi_subset)*0.7,
 
 CNP_train <- CNP_logi_subset[index,]
 CNP_test <- CNP_logi_subset[-index,]
-logi_m3 <-glm(Subject_Type~. , data = CNP_train, family = "binomial") 
-summary(logi_m3)
-round(exp(coef(logi_m3)),3)
-anova(logi_m3, test = "Chisq")
+logi_m1 <-glm(Subject_Type~. , data = CNP_train, family = "binomial") 
+summary(logi_m1)
+round(exp(coef(logi_m1)),3)
+anova(logi_m1, test = "Chisq")
 
 #R-squared
 
-R_squared <- 1 - (summary(logi_m3)[[4]]/summary(logi_m3)[[8]])
+R_squared <- 1 - (summary(logi_m1)[[4]]/summary(logi_m1)[[8]])
 R_squared
 
 #70/30 CV check
 
 #Train
-CNP_train$prediction <- predict(logi_m3, CNP_train, type = "response")
+CNP_train$prediction <- predict(logi_m1, CNP_train, type = "response")
 
 
 #Test
-CNP_test$prediction <- predict(logi_m3, CNP_test, type = "response")
+CNP_test$prediction <- predict(logi_m1, CNP_test, type = "response")
 
 prop.table(table(CNP$Subject_Type))
 
@@ -470,7 +469,7 @@ Classify(CNP_test, CNP_test$prediction,"Subject_Type", 0.75 )
 
 ```{r warning = FALSE}
 #CNP model k fold CV check
-set.seed(1234)
+set.seed(4321)
 
 Accuracy.k <- cv.error(CNP_logi_subset, "Subject_Type",cut_off = 0.75)
 Accuracy.k
@@ -495,10 +494,10 @@ COBRE_RF_subset<- COBRE %>%
 COBRE_RF_subset$Subject_Type <- as.factor(COBRE_RF_subset$Subject_Type)
 
 #Random Forest variable section 
-rfsrc_m4 <- rfsrc(Subject_Type~.,data = COBRE_RF_subset, na.action = c("na.omit"), ntree= 1000)
+rfsrc_m2 <- rfsrc(Subject_Type~.,data = COBRE_RF_subset, na.action = c("na.omit"), ntree= 1000)
 
 
-max_var <- max.subtree(rfsrc_m4, conservative = TRUE)
+max_var <- max.subtree(rfsrc_m2, conservative = TRUE)
 max_var$topvars
 #delete duplicate entity
 
@@ -514,14 +513,17 @@ subset <- delete_dup(subset,COBRE_RF_subset[,c(1,137:150)])
 COBRE_logi_subset <- COBRE_RF_subset[,c("Subject_Type",names(COBRE_RF_subset[,c(1,137:150)]), subset)]
 
 
-#Find interaction
-find.interaction(rfsrc_m4, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE)
-
 #No interactioin fund base on the result, we don't have to add interaction term
 
 
 COBRE_logi_subset <- na.omit(COBRE_logi_subset) %>%
   Standarize()
+
+
+#Find interaction
+find.interaction(rfsrc_m2, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE)
+#find.interaction(rfsrc_m2, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE, method = "vimp")
+
 
 #Correlation check
 high_cor <- findCorrelation(cor(COBRE_logi_subset[,-c(1:2)]),cutoff = 0.75) + 2
@@ -533,24 +535,24 @@ index <- sample(1:nrow(COBRE_logi_subset), size = round(nrow(COBRE_logi_subset)*
 
 COBRE_train <- COBRE_logi_subset[index,]
 COBRE_test <- COBRE_logi_subset[-index,]
-logi_m4 <-glm(Subject_Type~. , data = COBRE_train, family = "binomial") 
-summary(logi_m4)
-round(exp(coef(logi_m4)),3)
-anova(logi_m4, test = "Chisq")
+logi_m2 <-glm(Subject_Type~. , data = COBRE_train, family = "binomial") 
+summary(logi_m2)
+round(exp(coef(logi_m2)),3)
+anova(logi_m2, test = "Chisq")
 
 
 #R-squared
-R_squared <- 1 - (summary(logi_m4)[[4]]/summary(logi_m4)[[8]])
+R_squared <- 1 - (summary(logi_m2)[[4]]/summary(logi_m2)[[8]])
 R_squared
 
 #70/30 CV check
 
 #Train
-COBRE_train$prediction <- predict(logi_m4, COBRE_train, type = "response")
+COBRE_train$prediction <- predict(logi_m2, COBRE_train, type = "response")
 
 
 #Test
-COBRE_test$prediction <- predict(logi_m4, COBRE_test, type = "response")
+COBRE_test$prediction <- predict(logi_m2, COBRE_test, type = "response")
 
 prop.table(table(COBRE$Subject_Type))
 
@@ -631,7 +633,6 @@ table(COBRE$Ethnicity)
 Data <- merge(CNP,COBRE, all = TRUE) %>%
   select(-c(1))
 Data$Ethnicity <- as.factor(Data$Ethnicity)
-
 ```
 
 
@@ -643,10 +644,10 @@ set.seed(4321)
 
 #Random Forest variable selection
 
-rfsrc_m5 <- rfsrc(Study~.,data = Data, na.action = c("na.omit"), ntree= 1000)
+rfsrc_m3 <- rfsrc(Study~.,data = Data, na.action = c("na.omit"), ntree= 1000)
 
 
-max_var <- max.subtree(rfsrc_m5, conservative = TRUE)
+max_var <- max.subtree(rfsrc_m3, conservative = TRUE)
 
 max_var$topvars
 
@@ -658,13 +659,19 @@ subset <- as.vector(max_var$topvars)
 subset <- delete_dup(subset,Data[,c(1:5,139:152)])
 
 
+
 #Logistic Regression model
 
 Data_logi <- Data[,c("Study",names(Data[,c(1:5,139:152)]), subset)]
 
 Data_logi <- na.omit(Data_logi) %>%
   Standarize()
-  
+
+
+#find interaction
+find.interaction(rfsrc_m3, xvar.names = names(Data_logi[,-c(1)]), sorted = FALSE)
+#find.interaction(rfsrc_m3, xvar.names = names(Data_logi[,-c(1)]), sorted = FALSE, method = "vimp")
+
 
 #check correlation
 
@@ -678,31 +685,31 @@ index <- sample(1:nrow(Data_logi), size = round(nrow(Data_logi)*0.7,0),replace =
 
 Data_train <- Data_logi[index,]
 Data_test <- Data_logi[-index,]
-logi_m5 <-glm(Study~. + Subject_Type*Age , data = Data_train, family = "binomial") 
-summary(logi_m5)
-round(exp(coef(logi_m5)),3)
-anova(logi_m5, test = "Chisq")
+logi_m3 <-glm(Study~. + Subject_Type*Age , data = Data_train, family = "binomial") 
+summary(logi_m3)
+round(exp(coef(logi_m3)),3)
+anova(logi_m3, test = "Chisq")
 
 
 #R-squared
 
-R_squared <- 1 - (summary(logi_m5)[[4]]/summary(logi_m5)[[8]])
+R_squared <- 1 - (summary(logi_m3)[[4]]/summary(logi_m3)[[8]])
 R_squared
 
 #Effect plot
-plot(Effect(c("Subject_Type", "Age"), logi_m5),ask = FALSE)
+plot(Effect(c("Subject_Type", "Age"), logi_m3),ask = FALSE)
 
 
 #70/30 CV check
 
 #Train
-Data_train$prediction <- predict(logi_m5, Data_train, type = "response")
+Data_train$prediction <- predict(logi_m3, Data_train, type = "response")
 
 
 #Test
-Data_test$prediction <- predict(logi_m5, Data_test, type = "response")
+Data_test$prediction <- predict(logi_m3, Data_test, type = "response")
 
-prop.table(table(COBRE$Subject_Type))
+prop.table(table(Data$Subject_Type))
 
 
 accuracy_info <- AccuracyCutoffInfo( train = Data_train, test = Data_test, 
@@ -726,3 +733,40 @@ Accuracy.k <- cv.error(Data_logi, "Study", cut_off = 0.55)
 Accuracy.k
 mean(Accuracy.k)
 ```
+
+
+
+```{r}
+par(mfrow = c(2,2))
+
+
+ggplot(data = na.omit(Data), aes(x = Gender, fill = Study)) +
+  geom_bar() +
+  theme_bw()
+
+ggplot(data = na.omit(Data), aes(x = Ethnicity, fill = Study)) +
+  geom_bar() +
+  theme_bw()
+
+plot1 <- ggplot(data = na.omit(Data), aes(x = Study, y = Age)) +
+  geom_boxplot(fill = "steelblue") +
+  theme_bw() 
+
+plot2 <- ggplot(data = na.omit(Data), aes(x = Age, fill = Study)) + 
+  geom_density(alpha = 0.4) +
+  theme_bw()
+
+grid.arrange(plot1,plot2, nrow = 1, ncol = 2)
+
+plot3 <- ggplot(data = na.omit(Data), aes(x = Study, y = Education)) +
+  geom_boxplot(fill = "steelblue") +
+  theme_bw()
+
+plot4 <- ggplot(data = na.omit(Data), aes(x = Education, fill = Study)) +
+  geom_density(alpha = 0.4) +
+  theme_bw()
+
+grid.arrange(plot3,plot4, nrow = 1, ncol = 2)
+
+```
+
