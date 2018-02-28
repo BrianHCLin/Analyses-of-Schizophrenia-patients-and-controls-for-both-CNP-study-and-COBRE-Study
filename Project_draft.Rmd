@@ -770,3 +770,27 @@ grid.arrange(plot3,plot4, nrow = 1, ncol = 2)
 
 ```
 
+```{r}
+#Recall the anova output for the combined data set logistic model
+
+anova(logi_m3, test = "Chisq")
+
+#Hypothesis testing for demographic variables in the combined data set
+
+
+t.test(Age~Study, data = Data_logi)
+t.test(Education~Study, data = Data_logi)
+
+
+
+#Pearson's chi-squared test
+
+#H_{0} = there is no difference between the distributions
+#H_{1} = there is a difference between the distributions
+
+chisq.test(table(Data_logi$Study, Data_logi$Gender))
+chisq.test(table(Data_logi$Study, Data_logi$Ethnicity))
+chisq.test(table(Data_logi$Study, Data_logi$Subject_Type))
+
+```
+
