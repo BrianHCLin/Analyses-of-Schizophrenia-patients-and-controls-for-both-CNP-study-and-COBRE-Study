@@ -23,6 +23,8 @@ library(scales, warn.conflicts = FALSE, quietly=TRUE)
 library(data.table, warn.conflicts = FALSE, quietly=TRUE)
 library(effects, warn.conflicts = FALSE, quietly=TRUE )
 library(gridExtra, warn.conflicts = FALSE, quietly=TRUE )
+library(ggRandomForests, warn.conflicts = FALSE, quietly=TRUE )
+
 
 ```
 
@@ -379,7 +381,7 @@ CNP_RF_subset <- CNP %>%
 
 ```
 
-```{r}
+```{r, fig.width=10, fig.height=10}
 #CNP data modeling 
 
 set.seed(4321)
@@ -406,21 +408,21 @@ CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type",names(CNP_RF_subset[,c(1,137:
 
 #method="maxsubtree"
 
-#This invokes a maximal subtree analysis. In this case, a matrix is returned where entries [i][i] are the normalized minimal depth of variable [i] relative to the root node (normalized wrt the size of the tree) and entries [i][j] indicate the normalized minimal depth of a variable [j] wrt the maximal subtree for variable [i] (normalized wrt the size of [i]'s maximal subtree). Smaller [i][i] entries indicate predictive variables. Small [i][j] entries having small [i][i] entries are a sign of an interaction between variable i and j (note: the user should scan rows, not columns, for small entries). See Ishwaran et al. (2010, 2011) for more details.
-
-#method="vimp"
-
-#This invokes a joint-VIMP approach. Two variables are paired and their paired VIMP calculated (refered to as 'Paired' importance). The VIMP for each separate variable is also calculated. The sum of these two values is refered to as 'Additive' importance. A large positive or negative difference between 'Paired' and 'Additive' indicates an association worth pursuing if the univariate VIMP for each of the paired-variables is reasonably large. See Ishwaran (2007) for more details.
-
-
-#No interactioin fund base on the result, we don't have to add interaction term
+#This invokes a maximal subtree analysis. 
 
 CNP_logi_subset <- na.omit(CNP_logi_subset) %>%
   Standarize()
 
 #Find interaction
-find.interaction(rfsrc_m1, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted = FALSE)
-#find.interaction(rfsrc_m1, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted = FALSE, method = "vimp")
+gg_int <- gg_interaction(find.interaction(rfsrc_m1, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted = FALSE))
+
+
+plot(gg_int)
+
+#Minimal depth variable interaction plot for all variables of interest. 
+#Higher values indicate lower interactivity with target variable marked in red.
+
+#No interactioin found base on the result, we don't have to add interaction term
 
 
 #Correlation check
@@ -480,7 +482,7 @@ mean(Accuracy.k)
 
 
 
-```{r warning = FALSE}
+```{r warning = FALSE, fig.width=10, fig.height=10}
 #COBRE data modeling 
 
 set.seed(4321)
@@ -513,16 +515,15 @@ subset <- delete_dup(subset,COBRE_RF_subset[,c(1,137:150)])
 COBRE_logi_subset <- COBRE_RF_subset[,c("Subject_Type",names(COBRE_RF_subset[,c(1,137:150)]), subset)]
 
 
-#No interactioin fund base on the result, we don't have to add interaction term
-
-
 COBRE_logi_subset <- na.omit(COBRE_logi_subset) %>%
   Standarize()
 
 
 #Find interaction
-find.interaction(rfsrc_m2, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE)
-#find.interaction(rfsrc_m2, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE, method = "vimp")
+gg_int <- gg_interaction(find.interaction(rfsrc_m2, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE))
+plot(gg_int)
+
+#No interactioin fund base on the result, we don't have to add interaction term
 
 
 #Correlation check
@@ -636,7 +637,7 @@ Data$Ethnicity <- as.factor(Data$Ethnicity)
 ```
 
 
-```{r}
+```{r warning = FALSE, fig.width=10, fig.height=10}
 set.seed(4321)
 
 # Combine Data modeling
@@ -669,9 +670,10 @@ Data_logi <- na.omit(Data_logi) %>%
 
 
 #find interaction
-find.interaction(rfsrc_m3, xvar.names = names(Data_logi[,-c(1)]), sorted = FALSE)
-#find.interaction(rfsrc_m3, xvar.names = names(Data_logi[,-c(1)]), sorted = FALSE, method = "vimp")
+gg_int <- gg_interaction(find.interaction(rfsrc_m3, xvar.names = names(Data_logi[,-c(1)]), sorted = FALSE))
+plot(gg_int)
 
+#No interactioin fund base on the result, we don't have to add interaction term
 
 #check correlation
 
