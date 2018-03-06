@@ -361,24 +361,27 @@ CNP_within_merge <- CNP_within_merge %>%
   select(-c(75:77,91))
 
 
-#Merge both data into CNP
+#Merge both between and within data into CNP
 
 CNP <- merge(CNP_between_merge,CNP_within_merge, all = TRUE)
-
-
-
-#Use only the fMRI, MRI, and Age, keep global EFF
-
-CNP_between_RF_subset <- CNP_between_merge %>%
-  select(c(1:94))
-
-CNP_within_RF_subset <- CNP_within_merge %>%
-  select(c(1:72))
 
 CNP_RF_subset <- CNP %>%
   select(-c(1,5:41))
 
 
+
+
+
+#Merge both between and within into COBRE 
+
+COBRE <- merge(COBRE_between_merge, COBRE_within_merge, all = TRUE)
+
+#Use only the fMRI, MRI, and Age, keep global EFF
+
+COBRE_RF_subset<- COBRE %>%
+  select(-c(1,5:111))
+
+COBRE_RF_subset$Subject_Type <- as.factor(COBRE_RF_subset$Subject_Type)
 ```
 
 ```{r, fig.width=10, fig.height=10}
@@ -396,11 +399,11 @@ max_var$topvars
 
 #Logistic Regression Model
 
-subset <- as.vector(max_var$topvars)
+subset1 <- as.vector(max_var$topvars)
 
-subset <- delete_dup(subset,CNP_RF_subset[,c(1,137:150)])
+subset1 <- delete_dup(subset1,CNP_RF_subset[,c(1,137:150)])
 
-CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type",names(CNP_RF_subset[,c(1,137:150)]), subset)]
+CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type",names(CNP_RF_subset[,c(1,137:150)]), subset1)]
 
 
 
@@ -414,7 +417,10 @@ CNP_logi_subset <- na.omit(CNP_logi_subset) %>%
   Standarize()
 
 #Find interaction
-gg_int <- gg_interaction(find.interaction(rfsrc_m1, xvar.names = names(CNP_logi_subset[,-c(1)]), sorted = FALSE))
+gg_int <- gg_interaction(find.interaction(rfsrc_m1,
+                                          xvar.names = names(CNP_logi_subset[,-c(1)]),
+                                          sorted = FALSE,
+                                          verbose = FALSE))
 
 
 plot(gg_int)
@@ -478,22 +484,13 @@ Accuracy.k
 mean(Accuracy.k)
 
 
+
 ```
 
 
 
 ```{r warning = FALSE, fig.width=10, fig.height=10}
-#COBRE data modeling 
-
 set.seed(4321)
-
-COBRE <- merge(COBRE_between_merge, COBRE_within_merge, all = TRUE)
-
-
-COBRE_RF_subset<- COBRE %>%
-  select(-c(1,5:111))
-
-COBRE_RF_subset$Subject_Type <- as.factor(COBRE_RF_subset$Subject_Type)
 
 #Random Forest variable section 
 rfsrc_m2 <- rfsrc(Subject_Type~.,data = COBRE_RF_subset, na.action = c("na.omit"), ntree= 1000)
@@ -504,15 +501,15 @@ max_var$topvars
 #delete duplicate entity
 
 
-subset <- as.vector(max_var$topvars)
+subset2 <- as.vector(max_var$topvars)
 
-subset <- delete_dup(subset,COBRE_RF_subset[,c(1,137:150)])
+subset2 <- delete_dup(subset2,COBRE_RF_subset[,c(1,137:150)])
 
 
 #Logistic Regression model
 
 
-COBRE_logi_subset <- COBRE_RF_subset[,c("Subject_Type",names(COBRE_RF_subset[,c(1,137:150)]), subset)]
+COBRE_logi_subset <- COBRE_RF_subset[,c("Subject_Type",names(COBRE_RF_subset[,c(1,137:150)]), subset2)]
 
 
 COBRE_logi_subset <- na.omit(COBRE_logi_subset) %>%
@@ -520,7 +517,10 @@ COBRE_logi_subset <- na.omit(COBRE_logi_subset) %>%
 
 
 #Find interaction
-gg_int <- gg_interaction(find.interaction(rfsrc_m2, xvar.names = names(COBRE_logi_subset[,-c(1)]), sorted = FALSE))
+gg_int <- gg_interaction(find.interaction(rfsrc_m2, 
+                                          xvar.names = names(COBRE_logi_subset[,-c(1)]), 
+                                          sorted = FALSE,
+                                          verbose = FALSE))
 plot(gg_int)
 
 #No interactioin fund base on the result, we don't have to add interaction term
@@ -580,8 +580,41 @@ set.seed(4321)
 Accuracy.k <- cv.error(COBRE_logi_subset, "Subject_Type", cut_off = 0.425)
 Accuracy.k
 mean(Accuracy.k)
+
+
+
 ```
 
+
+```{r}
+set.seed(4321)
+#Fit Data into model build base on other study to test how it handles data from different study
+
+
+#Fit COBRE data into CNP Model 
+COBRE_logi_subset <- COBRE_RF_subset[,c("Subject_Type",names(COBRE_RF_subset[,c(1,137:150)]), subset1)] %>%
+  Standarize()
+
+COBRE_test <- COBRE_logi_subset 
+
+COBRE_test$prediction <- predict(logi_m1, COBRE_test, type = "response")
+Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.425 )
+
+
+#Fit CNP data into COBRE model
+CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type",names(CNP_RF_subset[,c(1,137:150)]), subset2)] %>%
+  Standarize()
+
+CNP_test <- CNP_logi_subset
+
+CNP_test$prediction <- predict(logi_m2, CNP_test, type = "response")
+Classify(CNP_test, CNP_test$prediction,"Subject_Type", cut_off = 0.2 )
+
+
+#When we introduce data from the other study, the both model has a a low testing accuracy.
+#This hint us that the two studys are different.
+
+```
 
 
 
@@ -625,15 +658,15 @@ for(i in 1:length(COBRE$Ethnicity)){
       COBRE$Ethnicity[i] <- 4
   }
 }
-COBRE$Ethnicity <- COBRE$Ethnicity - 2
-
+COBRE$Ethnicity <- COBRE$Ethnicity - 2 
 
 table(COBRE$Ethnicity)
-
 
 Data <- merge(CNP,COBRE, all = TRUE) %>%
   select(-c(1))
 Data$Ethnicity <- as.factor(Data$Ethnicity)
+levels(Data$Ethnicity) <- c("Hispanic", "non-Hispanic")
+
 ```
 
 
@@ -655,22 +688,25 @@ max_var$topvars
 #delete duplicate entity
 
 
-subset <- as.vector(max_var$topvars)
+subset3 <- as.vector(max_var$topvars)
 
-subset <- delete_dup(subset,Data[,c(1:5,139:152)])
+subset3 <- delete_dup(subset3,Data[,c(1:5,139:152)])
 
 
 
 #Logistic Regression model
 
-Data_logi <- Data[,c("Study",names(Data[,c(1:5,139:152)]), subset)]
+Data_logi <- Data[,c("Study",names(Data[,c(1:5,139:152)]), subset3)]
 
 Data_logi <- na.omit(Data_logi) %>%
   Standarize()
 
 
 #find interaction
-gg_int <- gg_interaction(find.interaction(rfsrc_m3, xvar.names = names(Data_logi[,-c(1)]), sorted = FALSE))
+gg_int <- gg_interaction(find.interaction(rfsrc_m3,
+                                          xvar.names = names(Data_logi[,-c(1)]), 
+                                          sorted = FALSE,
+                                          verbose = FALSE))
 plot(gg_int)
 
 #No interactioin fund base on the result, we don't have to add interaction term
@@ -711,7 +747,7 @@ Data_train$prediction <- predict(logi_m3, Data_train, type = "response")
 #Test
 Data_test$prediction <- predict(logi_m3, Data_test, type = "response")
 
-prop.table(table(Data$Subject_Type))
+prop.table(table(Data$Study))
 
 
 accuracy_info <- AccuracyCutoffInfo( train = Data_train, test = Data_test, 
