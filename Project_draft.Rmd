@@ -9,7 +9,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r warning= FALSE}
+```{r warning= FALSE, message= FALSE}
 library(rJava, warn.conflicts = FALSE, quietly=TRUE)
 library(xlsx, warn.conflicts = FALSE, quietly=TRUE)
 library(stringr, warn.conflicts = FALSE, quietly=TRUE)
@@ -616,7 +616,7 @@ Classify(CNP_test, CNP_test$prediction,"Subject_Type", 0.75 )
 
 ```
 
-```{r warning = FALSE, fig.width=10, fig.height=10}
+```{r warning = FALSE}
 set.seed(4321)
 #CNP ROC search for better True positive rate. 
 
@@ -637,7 +637,9 @@ roc_info <- ROCInfo( data = cm_info$data, predict = "predict",
 
 #Optimal cutoff for True positive rate
 roc_info$cutoff
+```
 
+```{r}
 grid.draw(roc_info$plot)
 
 ```
@@ -758,16 +760,16 @@ Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.425)
 cm_info <- ConfusionMatrixInfo(data = COBRE_test, predict = "prediction", actual = "Subject_Type", 0.425)
 
 cm_info$plot
-invisible(dev.off())
-
+invisible(graphics.off())
 roc_info <- ROCInfo( data = cm_info$data, predict = "predict", 
                      actual = "actual", cost.fp = 1000, cost.fn = 1200 )
 
 #Optimal cutoff for True positive rate
 roc_info$cutoff
+```
 
+```{r}
 grid.draw(roc_info$plot)
-
 ```
 
 
