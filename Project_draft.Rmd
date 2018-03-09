@@ -885,7 +885,7 @@ levels(Data$Ethnicity) <- c("Hispanic", "non-Hispanic")
 ```
 
 
-```{r warning = FALSE}
+```{r warning = FALSE, fig.width=10, fig.height=10}
 set.seed(4321)
 
 # Combine Data modeling
