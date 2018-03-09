@@ -17,25 +17,31 @@ library(dplyr, warn.conflicts = FALSE, quietly=TRUE)
 library(readr, warn.conflicts = FALSE, quietly=TRUE)
 library(randomForestSRC, warn.conflicts = FALSE, quietly=TRUE)
 library(ggplot2, warn.conflicts = FALSE, quietly=TRUE)
+library(ggthemes, warn.conflicts = FALSE, quietly=TRUE)
 library(caret, warn.conflicts = FALSE, quietly=TRUE)
 library(tidyr, warn.conflicts = FALSE, quietly=TRUE)
 library(scales, warn.conflicts = FALSE, quietly=TRUE)
 library(data.table, warn.conflicts = FALSE, quietly=TRUE)
-library(effects, warn.conflicts = FALSE, quietly=TRUE )
-library(gridExtra, warn.conflicts = FALSE, quietly=TRUE )
+library(effects, warn.conflicts = FALSE, quietly=TRUE)
+library(gridExtra, warn.conflicts = FALSE, quietly=TRUE)
 library(ggRandomForests, warn.conflicts = FALSE, quietly=TRUE )
+library(ROCR, warn.conflicts = FALSE, quietly=TRUE)
+library(ggpubr, warn.conflicts = FALSE, quietly=TRUE)
+library(grid, warn.conflicts = FALSE, quietly=TRUE)
 
 
 ```
 
-
 ```{r, warning = FALSE}
 #Functions
 
+#AccuracyCutoffInfo, ConfusionMatrixInfo, ROCInfo function is completetly coded by github user ethen8181
 
-#The AccuracyCutoffInfo function is a modified version of codes from the following github page
+#The AccuracyCutoffInfo, ConfusionMatrixInfo, and ROCInfo functions in this Rmarkdown are a modified version of codes modified by me that work better with R's default setting. 
+
+#The following function can be found at the following github page
 #https://github.com/ethen8181/machine-learning/blob/master/unbalanced/unbalanced_code/unbalanced_functions.R
-#All Credit to user ethen8181
+#Credit to user ethen8181 for creating these functions.
 
 
 # ------------------------------------------------------------------------------------------
@@ -92,6 +98,140 @@ AccuracyCutoffInfo <- function( train, test, predict, actual )
 
 #----------------------
 
+# ------------------------------------------------------------------------------------------
+# [ConfusionMatrixInfo] : 
+# Obtain the confusion matrix plot and data.table for a given
+# dataset that already consists the predicted score and actual outcome.
+# @data    : your data.table or data.frame type data that consists the column
+#            of the predicted score and actual outcome 
+# @predict : predicted score's column name
+# @actual  : actual results' column name
+# @cutoff  : cutoff value for the prediction score 
+# return   : 1. data : a data.table consisting of three column
+#            		   the first two stores the original value of the prediction and actual outcome from
+#			 		   the passed in data frame, the third indicates the type, which is after choosing the 
+#			 		   cutoff value, will this row be a true/false positive/ negative 
+#            2. plot : plot that visualizes the data.table 
+
+ConfusionMatrixInfo <- function( data, predict, actual, cutoff )
+{	
+  # extract the column ;
+  # relevel making 1 appears on the more commonly seen position in 
+  # a two by two confusion matrix	
+  predict <- data[[predict]]
+  temp_data <- as.factor( as.numeric(data[[actual]]) )
+  levels(temp_data) <- c(0,1)
+  actual  <- relevel(temp_data, "1") 
+  
+  result <- data.table( actual = actual, predict = predict )
+  
+  # caculating each pred falls into which category for the confusion matrix
+  result[ , type := ifelse( predict >= cutoff & actual == 1, "TP",
+                            ifelse( predict >= cutoff & actual == 0, "FP", 
+                                    ifelse( predict <  cutoff & actual == 1, "FN", "TN" ) ) ) %>% as.factor() ]
+  
+  # jittering : can spread the points along the x axis 
+  plot <- ggplot( result, aes( actual, predict, color = type ) ) + 
+    geom_violin( fill = "white", color = NA ) +
+    geom_jitter( shape = 1 ) + 
+    geom_hline( yintercept = cutoff, color = "blue", alpha = 0.6 ) + 
+    scale_y_continuous( limits = c( 0, 1 ) ) + 
+    scale_color_discrete( breaks = c( "TP", "FN", "FP", "TN" ) ) + # ordering of the legend 
+    guides( col = guide_legend( nrow = 2 ) ) + # adjust the legend to have two rows  
+    ggtitle( sprintf( "Confusion Matrix with Cutoff at %.2f", cutoff ) )
+  
+  return( list( data = result, plot = plot ) )
+}
+
+
+
+# ------------------------------------------------------------------------------------------
+# [ROCInfo] : 
+# Pass in the data that already consists the predicted score and actual outcome.
+# to obtain the ROC curve 
+# @data    : your data.table or data.frame type data that consists the column
+#            of the predicted score and actual outcome
+# @predict : predicted score's column name
+# @actual  : actual results' column name
+# @cost.fp : associated cost for a false positive 
+# @cost.fn : associated cost for a false negative 
+# return   : a list containing  
+#			 1. plot        : a side by side roc and cost plot, title showing optimal cutoff value
+# 				 	   		  title showing optimal cutoff, total cost, and area under the curve (auc)
+# 		     2. cutoff      : optimal cutoff value according to the specified fp/fn cost 
+#		     3. totalcost   : total cost according to the specified fp/fn cost
+#			 4. auc 		: area under the curve
+#		     5. sensitivity : TP / (TP + FN)
+#		     6. specificity : TN / (FP + TN)
+
+ROCInfo <- function( data, predict, actual, cost.fp, cost.fn )
+{
+  # calculate the values using the ROCR library
+  # true positive, false postive 
+  pred <- prediction( data[[predict]], data[[actual]] )
+  perf <- performance( pred, "tpr", "fpr" )
+  roc_dt <- data.frame( fpr = perf@x.values[[1]], tpr = perf@y.values[[1]] )
+  
+  # cost with the specified false positive and false negative cost 
+  # false postive rate * number of negative instances * false positive cost + 
+  # false negative rate * number of positive instances * false negative cost
+  cost <- perf@x.values[[1]] * cost.fp * sum( data[[actual]] == 0 ) + 
+    ( 1 - perf@y.values[[1]] ) * cost.fn * sum( data[[actual]] == 1 )
+  
+  cost_dt <- data.frame( cutoff = pred@cutoffs[[1]], cost = cost )
+  
+  # optimal cutoff value, and the corresponding true positive and false positive rate
+  best_index  <- which.min(cost)
+  best_cost   <- cost_dt[ best_index, "cost" ]
+  best_tpr    <- roc_dt[ best_index, "tpr" ]
+  best_fpr    <- roc_dt[ best_index, "fpr" ]
+  best_cutoff <- pred@cutoffs[[1]][ best_index ]
+  
+  # area under the curve
+  auc <- performance( pred, "auc" )@y.values[[1]]
+  
+  # normalize the cost to assign colors to 1
+  normalize <- function(v) ( v - min(v) ) / diff( range(v) )
+  
+  # create color from a palette to assign to the 100 generated threshold between 0 ~ 1
+  # then normalize each cost and assign colors to it, the higher the blacker
+  # don't times it by 100, there will be 0 in the vector
+  col_ramp <- colorRampPalette( c( "green", "orange", "red", "black" ) )(100)   
+  col_by_cost <- col_ramp[ ceiling( normalize(cost) * 99 ) + 1 ]
+  
+  roc_plot <- ggplot( roc_dt, aes( fpr, tpr ) ) + 
+    geom_line( color = rgb( 0, 0, 1, alpha = 0.3 ) ) +
+    geom_point( color = col_by_cost, size = 4, alpha = 0.2 ) + 
+    geom_segment( aes( x = 0, y = 0, xend = 1, yend = 1 ), alpha = 0.8, color = "royalblue" ) + 
+    labs( title = "ROC", x = "False Postive Rate", y = "True Positive Rate" ) +
+    geom_hline( yintercept = best_tpr, alpha = 0.8, linetype = "dashed", color = "steelblue4" ) +
+    geom_vline( xintercept = best_fpr, alpha = 0.8, linetype = "dashed", color = "steelblue4" ) + 
+    theme_bw()
+  
+  cost_plot <- ggplot( cost_dt, aes( cutoff, cost ) ) +
+    geom_line( color = "blue", alpha = 0.5 ) +
+    geom_point( color = col_by_cost, size = 4, alpha = 0.5 ) +
+    ggtitle( "Cost" ) +
+    scale_y_continuous( labels = comma ) +
+    geom_vline( xintercept = best_cutoff, alpha = 0.8, linetype = "dashed", color = "steelblue4" ) + 
+    theme_bw()
+  
+  # the main title for the two arranged plot
+  sub_title <- sprintf( "Cutoff at %.2f - Total Cost = %.2f, AUC = %.3f", 
+                        best_cutoff, best_cost, auc )
+  
+  # arranged into a side by side plot
+  plot <- arrangeGrob( roc_plot, cost_plot, ncol = 2, 
+                       top = textGrob( sub_title, gp = gpar( fontsize = 16, fontface = "bold" ) ) )
+  
+  return( list( plot 		  = plot, 
+                cutoff 	  = best_cutoff, 
+                totalcost   = best_cost, 
+                auc         = auc,
+                sensitivity = best_tpr, 
+                specificity = 1 - best_fpr ) )
+}
+
 #delete_dup
 
 #Some varaibles are forced into the model regardless of variable section result
@@ -133,7 +273,8 @@ Classify <- function(data, prediction,response, cut_off ){
   confuseion_matrix <- table(data[[response]],prediction)
   print(confuseion_matrix)
   Accuracy <- (confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
-  return(print(paste("The accuracy is", round(Accuracy*100,3),"%")))
+  TPR <- confuseion_matrix[2,2] / (confuseion_matrix[2,2] + confuseion_matrix[2,1])
+  return(cat(paste("The accuracy is", round(Accuracy*100,3),"%.\nThe True positive rate is", round(TPR*100,3),"%\n")))
 }
 
 
@@ -155,6 +296,7 @@ cv.error <- function(data, response, interaction = "", cut_off = 0.5){
   set.seed(r)
   folds <- createFolds(data[[response]],k = 10)
   Accuracy <- rep(NA,10)
+  TPR <- rep(NA,10)
   
   for(i in 1:10){
     
@@ -179,8 +321,9 @@ cv.error <- function(data, response, interaction = "", cut_off = 0.5){
     
     confuseion_matrix <- table(test[[response]],prediction)
     Accuracy[i] <- (confuseion_matrix[1,1] + confuseion_matrix[2,2])/sum(confuseion_matrix)
+    TPR[i] <- confuseion_matrix[2,2] / (confuseion_matrix[2,2] + confuseion_matrix[2,1])
   }
-  return(Accuracy)
+  return(list(Accuracy, TPR))
 }
 
 
@@ -473,20 +616,52 @@ Classify(CNP_test, CNP_test$prediction,"Subject_Type", 0.75 )
 
 ```
 
+```{r warning = FALSE, fig.width=10, fig.height=10}
+set.seed(4321)
+#CNP ROC search for better True positive rate. 
+
+#cutoff : Optimal cutoff value according to the specified FP and FN cost .
+#totalcost : Total cost according to the specified FP and FN cost.
+#auc : Area under the curve.
+#sensitivity : TP / (TP + FN) for the optimal cutoff.
+#specificity : TN / (FP + TN) for the optimal cutoff.
+
+
+cm_info <- ConfusionMatrixInfo(data = CNP_test, predict = "prediction", actual = "Subject_Type", 0.75)
+
+cm_info$plot
+invisible(dev.off())
+
+roc_info <- ROCInfo( data = cm_info$data, predict = "predict", 
+                     actual = "actual", cost.fp = 1000, cost.fn = 1500 )
+
+#Optimal cutoff for True positive rate
+roc_info$cutoff
+
+grid.draw(roc_info$plot)
+
+```
 
 
 ```{r warning = FALSE}
 #CNP model k fold CV check
 set.seed(4321)
 
-Accuracy.k <- cv.error(CNP_logi_subset, "Subject_Type",cut_off = 0.75)
-Accuracy.k
+#Optimal cutoff for Accuracy
+result <- cv.error(CNP_logi_subset, "Subject_Type",cut_off = roc_info$cutoff)
+Accuracy.k <- result[[1]]
 mean(Accuracy.k)
+TTP.k <- result[[2]]
+mean(TTP.k)
 
-
+#Optimal cutoff for True positive rate
+result <- cv.error(CNP_logi_subset, "Subject_Type",cut_off = roc_info$cutoff)
+Accuracy.k <- result[[1]]
+mean(Accuracy.k)
+TTP.k <- result[[2]]
+mean(TTP.k)
 
 ```
-
 
 
 ```{r warning = FALSE, fig.width=10, fig.height=10}
@@ -570,18 +745,54 @@ Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.425)
 
 ```
 
+```{r warning = FALSE}
+#COBRE ROC search for better True positive rate. 
+
+#cutoff : Optimal cutoff value according to the specified FP and FN cost .
+#totalcost : Total cost according to the specified FP and FN cost.
+#auc : Area under the curve.
+#sensitivity : TP / (TP + FN) for the optimal cutoff.
+#specificity : TN / (FP + TN) for the optimal cutoff.
+
+
+cm_info <- ConfusionMatrixInfo(data = COBRE_test, predict = "prediction", actual = "Subject_Type", 0.425)
+
+cm_info$plot
+invisible(dev.off())
+
+roc_info <- ROCInfo( data = cm_info$data, predict = "predict", 
+                     actual = "actual", cost.fp = 1000, cost.fn = 1200 )
+
+#Optimal cutoff for True positive rate
+roc_info$cutoff
+
+grid.draw(roc_info$plot)
+
+```
 
 
 ```{r warning = FALSE}
 #COBRE model k fold CV check
 
 set.seed(4321)
+#Optimal cutoff for Accuracy
+result <-  cv.error(COBRE_logi_subset, "Subject_Type", cut_off = 0.425)
+Accuracy.k <- result[[1]]
+mean(Accuracy.k) 
 
-Accuracy.k <- cv.error(COBRE_logi_subset, "Subject_Type", cut_off = 0.425)
-Accuracy.k
-mean(Accuracy.k)
+TTP <- result[[2]]
+mean(TTP)
+
+#Optimal cutoff for True postitive rate
+result <-  cv.error(COBRE_logi_subset, "Subject_Type", cut_off = roc_info$cutoff)
+Accuracy.k <- result[[1]]
+mean(Accuracy.k) 
+
+TTP <- result[[2]]
+mean(TTP)
 
 
+#When we want optimize True positive rate, we gave up about 10% of accuracy.  
 
 ```
 
@@ -592,23 +803,27 @@ set.seed(4321)
 
 
 #Fit COBRE data into CNP Model 
-COBRE_logi_subset <- COBRE_RF_subset[,c("Subject_Type",names(COBRE_RF_subset[,c(1,137:150)]), subset1)] %>%
+Fit_COBRE_logi_subset <- COBRE_RF_subset[,c("Subject_Type",names(COBRE_RF_subset[,c(1,137:150)]), subset1)] %>%
   Standarize()
 
-COBRE_test <- COBRE_logi_subset 
+Fit_COBRE_test <- Fit_COBRE_logi_subset 
 
-COBRE_test$prediction <- predict(logi_m1, COBRE_test, type = "response")
-Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.425 )
+invisible(rm(Fit_COBRE_logi_subset))
+
+Fit_COBRE_test$prediction <- predict(logi_m1, Fit_COBRE_test, type = "response")
+Classify(Fit_COBRE_test, Fit_COBRE_test$prediction,"Subject_Type", 0.17 )
 
 
 #Fit CNP data into COBRE model
-CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type",names(CNP_RF_subset[,c(1,137:150)]), subset2)] %>%
+Fit_CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type",names(CNP_RF_subset[,c(1,137:150)]), subset2)] %>%
   Standarize()
 
-CNP_test <- CNP_logi_subset
+Fit_CNP_test <- Fit_CNP_logi_subset
 
-CNP_test$prediction <- predict(logi_m2, CNP_test, type = "response")
-Classify(CNP_test, CNP_test$prediction,"Subject_Type", cut_off = 0.2 )
+invisible(rm(Fit_CNP_logi_subset))
+
+Fit_CNP_test$prediction <- predict(logi_m2, Fit_CNP_test, type = "response")
+Classify(Fit_CNP_test, Fit_CNP_test$prediction,"Subject_Type", cut_off = 0.69 )
 
 
 #When we introduce data from the other study, the both model has a a low testing accuracy.
@@ -618,7 +833,7 @@ Classify(CNP_test, CNP_test$prediction,"Subject_Type", cut_off = 0.2 )
 
 
 
-```{r warning = FALSE}
+```{r warning = FALSE }
 #Combine data 
 
 #Further data cleaning to merge CNP and COBRE data 
@@ -670,7 +885,7 @@ levels(Data$Ethnicity) <- c("Hispanic", "non-Hispanic")
 ```
 
 
-```{r warning = FALSE, fig.width=10, fig.height=10}
+```{r warning = FALSE}
 set.seed(4321)
 
 # Combine Data modeling
@@ -765,10 +980,10 @@ Classify(Data_test, Data_test$prediction,"Study", 0.55)
 
 ```{r warning = FALSE}
 #Combine data model k fold CV check
+#Here we are not interesting in looking at the True positive rate
 set.seed(4321)
 
-Accuracy.k <- cv.error(Data_logi, "Study", cut_off = 0.55)
-Accuracy.k
+Accuracy.k <- cv.error(Data_logi, "Study", cut_off = 0.55)[[1]]
 mean(Accuracy.k)
 ```
 
