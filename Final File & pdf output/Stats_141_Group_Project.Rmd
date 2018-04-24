@@ -1,51 +1,60 @@
 ---
-title: "project"
-author: "Brian Lin"
-date: "February 14, 2018"
-output:
-  pdf_document: default
-  html_document: default
-editor_options:
-  chunk_output_type: console
+title: "Stats 141 Final Project"
+author: "Tsz Him Brian Ng"
+date: "2/10/2018"
+fontsize: 11pt
+geometry: margin = 1.2in
+header-includes:
+- \usepackage{placeins}
+- \usepackage{setspace}
+- \usepackage{chngcntr}
+- \usepackage{fancyhdr}
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{hyperref}
+- \usepackage{enumitem}
+- \onehalfspacing
+- \counterwithin{table}{section}
+output: pdf_document
 ---
+\setlength{\headsep}{1cm}
+
+\pagenumbering{gobble}
+\tableofcontents
+\newpage
+
+\pagestyle{fancy}
+\pagenumbering{arabic} 
+\fancyhead[LE,RO]{} \fancyhead[LO,RE]{} \renewcommand{\headrulewidth}{0.4pt} \renewcommand{\footrulewidth}{0pt}
+\fancyhead[CO,CE]{Packages} \section*{Packages} \addcontentsline{toc}{section}{Packages}
 
 ```{r warning= FALSE, message= FALSE}
-library(rJava, warn.conflicts = FALSE, quietly=TRUE)
-library(xlsx, warn.conflicts = FALSE, quietly=TRUE)
-library(stringr, warn.conflicts = FALSE, quietly=TRUE)
-library(dplyr, warn.conflicts = FALSE, quietly=TRUE)
-library(readr, warn.conflicts = FALSE, quietly=TRUE)
-library(randomForestSRC, warn.conflicts = FALSE, quietly=TRUE)
-library(ggplot2, warn.conflicts = FALSE, quietly=TRUE)
+library(readxl, warn.conflicts = FALSE, quietly = TRUE)
+library(stringr, warn.conflicts = FALSE, quietly = TRUE)
+library(dplyr, warn.conflicts = FALSE, quietly = TRUE)
+library(readr, warn.conflicts = FALSE, quietly = TRUE)
+library(randomForestSRC, warn.conflicts = FALSE, quietly = TRUE)
+library(ggplot2, warn.conflicts = FALSE, quietly = TRUE)
 library(ggthemes, warn.conflicts = FALSE, quietly=TRUE)
-library(caret, warn.conflicts = FALSE, quietly=TRUE)
-library(tidyr, warn.conflicts = FALSE, quietly=TRUE)
-library(scales, warn.conflicts = FALSE, quietly=TRUE)
-library(data.table, warn.conflicts = FALSE, quietly=TRUE)
-library(effects, warn.conflicts = FALSE, quietly=TRUE)
-library(gridExtra, warn.conflicts = FALSE, quietly=TRUE)
-library(ggRandomForests, warn.conflicts = FALSE, quietly=TRUE )
+library(caret, warn.conflicts = FALSE, quietly = TRUE)
+library(tidyr, warn.conflicts = FALSE, quietly = TRUE)
+library(scales, warn.conflicts = FALSE, quietly = TRUE)
+library(data.table, warn.conflicts = FALSE, quietly = TRUE)
+library(effects, warn.conflicts = FALSE, quietly = TRUE)
+library(gridExtra, warn.conflicts = FALSE, quietly = TRUE)
+library(ggRandomForests, warn.conflicts = FALSE, quietly = TRUE)
 library(ROCR, warn.conflicts = FALSE, quietly=TRUE)
 library(ggpubr, warn.conflicts = FALSE, quietly=TRUE)
 library(grid, warn.conflicts = FALSE, quietly=TRUE)
-
-
+library(maxent, warn.conflicts = FALSE, quietly = TRUE)
 ```
 
-```{r, warning = FALSE}
-#Functions
+\newpage
+\fancyhead[LE,RO]{} \fancyhead[LO,RE]{} \renewcommand{\headrulewidth}{0.4pt} \renewcommand{\footrulewidth}{0pt}
+\fancyhead[CO,CE]{Functions} \section*{Functions} \addcontentsline{toc}{section}{Functions}
 
-#AccuracyCutoffInfo, ConfusionMatrixInfo, ROCInfo function is completetly coded by github user ethen8181
-
-#The AccuracyCutoffInfo, ConfusionMatrixInfo, and ROCInfo functions in this Rmarkdown are a modified version of codes modified by me that work better with R's default setting. 
-
-#The following function can be found at the following github page
-#https://github.com/ethen8181/machine-learning/blob/master/unbalanced/unbalanced_code/unbalanced_functions.R
-#Credit to user ethen8181 for creating these functions.
-
-
-# ------------------------------------------------------------------------------------------
-# [AccuracyCutoffInfo] : 
+\subsection{AccuracyCutoffInfo}
+```{r}
 # Obtain the accuracy on the trainining and testing dataset.
 # for cutoff value ranging from .4 to .8 ( with a .05 increase )
 # @train   : your data.table or data.frame type training data ( assumes you have the predicted score in it ).
@@ -95,24 +104,10 @@ AccuracyCutoffInfo <- function( train, test, predict, actual )
   return( list( data = accuracy, plot = plot ) )
 }
 
+```
 
-#----------------------
-
-# ------------------------------------------------------------------------------------------
-# [ConfusionMatrixInfo] : 
-# Obtain the confusion matrix plot and data.table for a given
-# dataset that already consists the predicted score and actual outcome.
-# @data    : your data.table or data.frame type data that consists the column
-#            of the predicted score and actual outcome 
-# @predict : predicted score's column name
-# @actual  : actual results' column name
-# @cutoff  : cutoff value for the prediction score 
-# return   : 1. data : a data.table consisting of three column
-#            		   the first two stores the original value of the prediction and actual outcome from
-#			 		   the passed in data frame, the third indicates the type, which is after choosing the 
-#			 		   cutoff value, will this row be a true/false positive/ negative 
-#            2. plot : plot that visualizes the data.table 
-
+\subsection{ConfusionMatrixInfo}
+```{r}
 ConfusionMatrixInfo <- function( data, predict, actual, cutoff )
 {	
   # extract the column ;
@@ -142,11 +137,10 @@ ConfusionMatrixInfo <- function( data, predict, actual, cutoff )
   
   return( list( data = result, plot = plot ) )
 }
+```
 
-
-
-# ------------------------------------------------------------------------------------------
-# [ROCInfo] : 
+\subsection{ROCInfo}
+```{r}
 # Pass in the data that already consists the predicted score and actual outcome.
 # to obtain the ROC curve 
 # @data    : your data.table or data.frame type data that consists the column
@@ -232,8 +226,12 @@ ROCInfo <- function( data, predict, actual, cost.fp, cost.fn )
                 specificity = 1 - best_fpr ) )
 }
 
-#delete_dup
 
+```
+
+
+\subsection{delete dup}
+```{r}
 #Some varaibles are forced into the model regardless of variable section result
 #If the forced variable ended up being selected, this model will removed the duplicated variable. 
 
@@ -252,8 +250,10 @@ delete_dup <- function(subset, data){
   subset <- subset[-c(remove)]
   return(subset)
 }
+```
 
-
+\subsection{Classify}
+```{r}
 #data = data file 
 #Predition: predicted result
 #response: The name of response variable 
@@ -276,11 +276,10 @@ Classify <- function(data, prediction,response, cut_off ){
   TPR <- confuseion_matrix[2,2] / (confuseion_matrix[2,2] + confuseion_matrix[2,1])
   return(cat(paste("The accuracy is", round(Accuracy*100,3),"%.\nThe True positive rate is", round(TPR*100,3),"%\n")))
 }
+```
 
-
-
-#K fold K = 10
-
+\subsection{cv.error}
+```{r}
 #data = data using for prediction
 #response = name of the response variable
 #cut off = probability cut off point
@@ -325,8 +324,10 @@ cv.error <- function(data, response, interaction = "", cut_off = 0.5){
   }
   return(list(Accuracy, TPR))
 }
+```
 
-
+\subsection{Standarize}
+```{r}
 #Standardized variable
 
 Standarize <- function(data){
@@ -337,40 +338,36 @@ Standarize <- function(data){
   }
   return(data)
 }
-
 ```
 
-
-```{r warning = FALSE}
+\fancyhead[LE,RO]{} \fancyhead[LO,RE]{} \renewcommand{\headrulewidth}{0.4pt} \renewcommand{\footrulewidth}{0pt}
+\fancyhead[CO,CE]{Data Import} \section*{Data Import} \addcontentsline{toc}{section}{Data Import}
+```{r}
 #Load data
-
-setwd("A:/Winter 2018/Stats 141SL/project/")
 
 #load CNP data
 
-CNP_between <- read.table("CNP_between_nets.txt", header =  TRUE)
-CNP_within <- read.table("CNP_within_nets.txt", header = TRUE)
-CNPDemographic <- read.xlsx("CNPDemographicMeasures.xlsx", sheetName = "SNF")
+CNP_between <- read.table("A:/Winter 2018/Stats 141SL/project/CNP_between_nets.txt", header =  TRUE)
+CNP_within <- read.table("A:/Winter 2018/Stats 141SL/project/CNP_within_nets.txt", header = TRUE)
+CNPDemographic <- read_excel("A:/Winter 2018/Stats 141SL/project/CNPDemographicMeasures.xlsx", sheet = "SNF")
 
 
 #load COBRE data
 
-
-COBRE_between <- read.table("COBRE_between_nets.txt", header = TRUE)
-
-COBRE_within <- read.table("COBRE_within_nets.txt", header = TRUE)
-
-COBREDemographic <- read.xlsx("COBRE INDI Additional data.xls", sheetName = "NP")
-
-COBRE_phenotypic <- read_csv("COBRE_phenotypic_data.csv")
-
-
+COBRE_between <- read.table("A:/Winter 2018/Stats 141SL/project/COBRE_between_nets.txt", header = TRUE)
+COBRE_within <- read.table("A:/Winter 2018/Stats 141SL/project/COBRE_within_nets.txt", header = TRUE)
+COBREDemographic <- read_excel("A:/Winter 2018/Stats 141SL/project/COBRE INDI Additional data.xls", sheet = "NP")
+COBRE_phenotypic <- read_csv("A:/Winter 2018/Stats 141SL/project/COBRE_phenotypic_data.csv")
 ```
 
-```{r}
-#Data cleaning process
+\fancyhead[LE,RO]{} \fancyhead[LO,RE]{} \renewcommand{\headrulewidth}{0.4pt} \renewcommand{\footrulewidth}{0pt}
+\fancyhead[CO,CE]{Data Cleaning} \section*{Data Cleaning} \addcontentsline{toc}{section}{Data Cleaning}
 
-#Removed character string
+\subsection{CNP Data}
+
+\subsubsection{Cleaning ID Column}
+```{r}
+# Removed character string
 
 pattern <- "[a-z]*-"
 
@@ -379,11 +376,10 @@ CNP_within$Subject_ID <- as.numeric(str_replace_all(CNP_within$Subject_ID
 
 CNP_between$Subject_ID <- as.numeric(str_replace_all(CNP_between$Subject_ID 
 , pattern,""))
+```
 
-
-
-
-#Merge data
+\subsubsection{Merging Data With Demographic Data}
+```{r}
 CNP_within_merge <- left_join(CNP_within,CNPDemographic, by = c("Subject_ID" = "PTID"))
 
 #summary(CNP_within_merge)
@@ -391,10 +387,51 @@ CNP_within_merge <- left_join(CNP_within,CNPDemographic, by = c("Subject_ID" = "
 CNP_between_merge <- left_join(CNP_between,CNPDemographic, by = c("Subject_ID" = "PTID"))
 
 #summary(CNP_between_merge)
+```
 
+\subsubsection{Dropping Unwanted Subject Types}
+```{r}
+CNP_within_merge <- CNP_within_merge %>%
+  filter(Subject_Type == "Control" | Subject_Type == "Schizophrenia")
 
+table(CNP_within_merge$Subject_Type)
 
+CNP_between_merge <- CNP_between_merge %>%
+  filter(Subject_Type == "Control" | Subject_Type == "Schizophrenia")
 
+table(CNP_between_merge$Subject_Type)
+
+CNP_within_merge$Subject_Type <- droplevels(CNP_within_merge$Subject_Type)
+levels(CNP_within_merge$Subject_Type)
+
+CNP_between_merge$Subject_Type <- droplevels(CNP_between_merge$Subject_Type)
+levels(CNP_between_merge$Subject_Type)
+```
+
+\subsubsection{Merging Data into One Data}
+```{r}
+#CNP between
+#remove 96:98, 112
+CNP_between_merge <- CNP_between_merge %>%
+  select(-c(96:98,112))
+
+#CNP within get rid of
+#75 #76 #91
+CNP_within_merge <- CNP_within_merge %>%
+  select(-c(75:77,91))
+
+#Merge both between and within data into CNP
+
+CNP <- merge(CNP_between_merge,CNP_within_merge, all = TRUE)
+
+CNP_RF_subset <- CNP %>%
+  select(-c(1,5:41))
+```
+
+\subsection{COBRE Data}
+
+\subsubsection{Cleaning ID Column}
+```{r}
 #Revmove character string 
 
 COBRE_between$Subject_ID <- as.numeric(str_replace_all(COBRE_between$Subject_ID 
@@ -403,27 +440,15 @@ COBRE_between$Subject_ID <- as.numeric(str_replace_all(COBRE_between$Subject_ID
 COBRE_within$Subject_ID <- as.numeric(str_replace_all(COBRE_within$Subject_ID 
 , pattern,""))
 
-
-
-
 #remove 00
 
 pattern <- "^00"
 
 COBREDemographic$ID <- as.numeric(str_replace_all(COBREDemographic$ID, pattern,""))
+```
 
-
-#Merge data
-
-COBRE_within_merge <- left_join(COBRE_within,COBREDemographic, by = c("Subject_ID" = "ID"))
-
-
-#summary(COBRE_within_merge)
-
-COBRE_between_merge <- left_join(COBRE_between,COBREDemographic, by = c("Subject_ID" = "ID"))
-
-#summary(COBRE_between_merge)
-
+\subsubsection{Cleaning Phenotypic Data}
+```{r}
 COBRE_phenotypic$Gender <- as.factor(COBRE_phenotypic$Gender)
 
 COBRE_phenotypic <- COBRE_phenotypic %>%
@@ -432,35 +457,27 @@ COBRE_phenotypic <- COBRE_phenotypic %>%
 COBRE_phenotypic$Gender <- droplevels(COBRE_phenotypic$Gender)
 
 colnames(COBRE_phenotypic)[1:2] <- c("Subject_ID", "Age")
+```
+
+\subsubsection{Merging Data}
+```{r}
+COBRE_within_merge <- left_join(COBRE_within,COBREDemographic, by = c("Subject_ID" = "ID"))
+
+#summary(COBRE_within_merge)
+
+COBRE_between_merge <- left_join(COBRE_between,COBREDemographic, by = c("Subject_ID" = "ID"))
+
+#summary(COBRE_between_merge)
 
 COBRE_between_merge <- merge(COBRE_between_merge,COBRE_phenotypic, all = TRUE)
 COBRE_within_merge <- merge(COBRE_within_merge,COBRE_phenotypic, all = TRUE)
 
-
 table(COBRE_between_merge$Diagnosis)
 table(COBRE_within_merge$Diagnosis)
+```
 
-
-
-#CNP filter
-
-
-CNP_within_merge <- CNP_within_merge %>%
-  filter(Subject_Type == "Control" | Subject_Type == "Schizophrenia")
-
-table(CNP_within_merge$Subject_Type)
-
-  
-CNP_between_merge <- CNP_between_merge %>%
-  filter(Subject_Type == "Control" | Subject_Type == "Schizophrenia")
-
-table(CNP_between_merge$Subject_Type)
-  
-  
-
-
-#COBRE filter
-
+\subsubsection{Mapping and Dropping Unwanted Subject Types}
+```{r}
 COBRE_between_merge <- COBRE_between_merge %>%
   filter(!(Diagnosis == 290.3 | Diagnosis == 296.26 | Diagnosis == 296.4 | Diagnosis == 311))
 
@@ -469,11 +486,10 @@ COBRE_within_merge <- COBRE_within_merge %>%
 
 table(COBRE_between_merge$Diagnosis)
 table(COBRE_within_merge$Diagnosis)
+```
 
-
-
-#Recoding Patients to Schizophrenia in COBRE
-
+\subsubsection{Recoding Patients to Schizophrenia}
+```{r}
 pattern <- "Patient"
 
 COBRE_between_merge$Subject_Type <- str_replace_all(COBRE_between_merge$Subject_Type,  pattern,"Schizophrenia")
@@ -481,40 +497,10 @@ COBRE_within_merge$Subject_Type <- str_replace_all(COBRE_within_merge$Subject_Ty
 
 table(COBRE_between_merge$Subject_Type)
 table(COBRE_within_merge$Subject_Type)
+```
 
-
-CNP_between_merge$Subject_Type <- droplevels(CNP_between_merge$Subject_Type)
-levels(CNP_between_merge$Subject_Type)
-
-CNP_within_merge$Subject_Type <- droplevels(CNP_within_merge$Subject_Type)
-levels(CNP_within_merge$Subject_Type)
-
-
-
-#CNP between
-#remove 96:98, 112
-CNP_between_merge <- CNP_between_merge %>%
-  select(-c(96:98,112))
-
-
-
-#CNP within get rid of
-#75 #76 #91
-CNP_within_merge <- CNP_within_merge %>%
-  select(-c(75:77,91))
-
-
-#Merge both between and within data into CNP
-
-CNP <- merge(CNP_between_merge,CNP_within_merge, all = TRUE)
-
-CNP_RF_subset <- CNP %>%
-  select(-c(1,5:41))
-
-
-
-
-
+\subsubsection{Merging Data into One Data}
+```{r}
 #Merge both between and within into COBRE 
 
 COBRE <- merge(COBRE_between_merge, COBRE_within_merge, all = TRUE)
@@ -526,19 +512,21 @@ COBRE_RF_subset<- COBRE %>%
 
 COBRE_RF_subset$Subject_Type <- as.factor(COBRE_RF_subset$Subject_Type)
 ```
+\newpage
+\fancyhead[LE,RO]{} \fancyhead[LO,RE]{} \renewcommand{\headrulewidth}{0.4pt} \renewcommand{\footrulewidth}{0pt}
+\fancyhead[CO,CE]{Data Analysis} \section*{Data Analysis} \addcontentsline{toc}{section}{Data Analysis}
 
+\subsection{CNP Data Modeling}
 ```{r, fig.width=10, fig.height=10}
 #CNP data modeling 
 
 set.seed(4321)
-
 
 rfsrc_m1 <- rfsrc(as.factor(Subject_Type)~.,data = CNP_RF_subset, na.action = c("na.omit"), ntree= 1000)
 
 max_var <- max.subtree(rfsrc_m1, conservative = TRUE)
 max_var$topvars
 #delete duplicate entity
-
 
 #Logistic Regression Model
 
@@ -547,8 +535,6 @@ subset1 <- as.vector(max_var$topvars)
 subset1 <- delete_dup(subset1,CNP_RF_subset[,c(1,137:150)])
 
 CNP_logi_subset <- CNP_RF_subset[,c("Subject_Type",names(CNP_RF_subset[,c(1,137:150)]), subset1)]
-
-
 
 #Using a previously grown forest, identify pairwise interactions for all pairs of variables from a specified list. There are two distinct approaches specified by the option method.
 
@@ -564,7 +550,6 @@ gg_int <- gg_interaction(find.interaction(rfsrc_m1,
                                           xvar.names = names(CNP_logi_subset[,-c(1)]),
                                           sorted = FALSE,
                                           verbose = FALSE))
-
 
 plot(gg_int)
 
@@ -584,6 +569,10 @@ index <- sample(1:nrow(CNP_logi_subset), size = round(nrow(CNP_logi_subset)*0.7,
 CNP_train <- CNP_logi_subset[index,]
 CNP_test <- CNP_logi_subset[-index,]
 logi_m1 <-glm(Subject_Type~. , data = CNP_train, family = "binomial") 
+
+write.csv(CNP_logi_subset, file = "Data_CNP_Logi.csv", row.names = FALSE)
+save.model(logi_m1, file = "logistic_model_cnp.RData")
+
 summary(logi_m1)
 round(exp(coef(logi_m1)),3)
 anova(logi_m1, test = "Chisq")
@@ -614,9 +603,6 @@ Classify(CNP_train, CNP_train$prediction,"Subject_Type", 0.75 )
 
 Classify(CNP_test, CNP_test$prediction,"Subject_Type", 0.75 )
 
-```
-
-```{r warning = FALSE}
 set.seed(4321)
 #CNP ROC search for better True positive rate. 
 
@@ -641,11 +627,9 @@ roc_info$cutoff
 
 ```{r}
 grid.draw(roc_info$plot)
-
 ```
 
-
-```{r warning = FALSE}
+```{r}
 #CNP model k fold CV check
 set.seed(4321)
 
@@ -662,23 +646,22 @@ Accuracy.k <- result[[1]]
 mean(Accuracy.k)
 TTP.k <- result[[2]]
 mean(TTP.k)
-
 ```
 
 
-```{r warning = FALSE, fig.width=10, fig.height=10}
+
+\subsection{COBRE Data Modeling}
+```{r, fig.width=10, fig.height=10}
 set.seed(4321)
 
 #Random Forest variable section 
 rfsrc_m2 <- rfsrc(Subject_Type~.,data = COBRE_RF_subset, na.action = c("na.omit"), ntree= 1000)
 
-
-max_var <- max.subtree(rfsrc_m2, conservative = TRUE)
-max_var$topvars
+max_var2 <- max.subtree(rfsrc_m2, conservative = TRUE)
+max_var2$topvars
 #delete duplicate entity
 
-
-subset2 <- as.vector(max_var$topvars)
+subset2 <- as.vector(max_var2$topvars)
 
 subset2 <- delete_dup(subset2,COBRE_RF_subset[,c(1,137:150)])
 
@@ -714,6 +697,10 @@ index <- sample(1:nrow(COBRE_logi_subset), size = round(nrow(COBRE_logi_subset)*
 COBRE_train <- COBRE_logi_subset[index,]
 COBRE_test <- COBRE_logi_subset[-index,]
 logi_m2 <-glm(Subject_Type~. , data = COBRE_train, family = "binomial") 
+
+write.csv(COBRE_logi_subset, file = "Data_COBRE_Logi.csv", row.names = FALSE)
+save.model(logi_m2, file = "logistic_model_cobre.RData")
+
 summary(logi_m2)
 round(exp(coef(logi_m2)),3)
 anova(logi_m2, test = "Chisq")
@@ -745,9 +732,6 @@ Classify(COBRE_train, COBRE_train$prediction,"Subject_Type", 0.425)
 
 Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.425)
 
-```
-
-```{r warning = FALSE}
 #COBRE ROC search for better True positive rate. 
 
 #cutoff : Optimal cutoff value according to the specified FP and FN cost .
@@ -757,23 +741,22 @@ Classify(COBRE_test, COBRE_test$prediction,"Subject_Type", 0.425)
 #specificity : TN / (FP + TN) for the optimal cutoff.
 
 
-cm_info <- ConfusionMatrixInfo(data = COBRE_test, predict = "prediction", actual = "Subject_Type", 0.425)
+cm_info2 <- ConfusionMatrixInfo(data = COBRE_test, predict = "prediction", actual = "Subject_Type", 0.425)
 
-cm_info$plot
+cm_info2$plot
 invisible(graphics.off())
-roc_info <- ROCInfo( data = cm_info$data, predict = "predict", 
+roc_info2 <- ROCInfo( data = cm_info2$data, predict = "predict", 
                      actual = "actual", cost.fp = 1000, cost.fn = 1200 )
 
 #Optimal cutoff for True positive rate
-roc_info$cutoff
+roc_info2$cutoff
 ```
 
 ```{r}
-grid.draw(roc_info$plot)
+grid.draw(roc_info2$plot)
 ```
 
-
-```{r warning = FALSE}
+```{r}
 #COBRE model k fold CV check
 
 set.seed(4321)
@@ -798,7 +781,7 @@ mean(TTP)
 
 ```
 
-
+\subsection{Fitting Data into Model Based on the Other Study}
 ```{r}
 set.seed(4321)
 #Fit Data into model build base on other study to test how it handles data from different study
@@ -830,12 +813,10 @@ Classify(Fit_CNP_test, Fit_CNP_test$prediction,"Subject_Type", cut_off = 0.69 )
 
 #When we introduce data from the other study, the both model has a a low testing accuracy.
 #This hint us that the two studys are different.
-
 ```
 
-
-
-```{r warning = FALSE }
+\subsection{Combing CNP and COBRE Data}
+```{r}
 #Combine data 
 
 #Further data cleaning to merge CNP and COBRE data 
@@ -884,10 +865,11 @@ Data <- merge(CNP,COBRE, all = TRUE) %>%
 Data$Ethnicity <- as.factor(Data$Ethnicity)
 levels(Data$Ethnicity) <- c("Hispanic", "non-Hispanic")
 
+write.csv(Data, file = "Stats_141_Combined_Data.csv", row.names = FALSE)
 ```
 
-
-```{r warning = FALSE, fig.width=10, fig.height=10}
+\subsection{Combined Data Modeling}
+```{r, fig.width=10, fig.height=10}
 set.seed(4321)
 
 # Combine Data modeling
@@ -918,6 +900,7 @@ Data_logi <- Data[,c("Study",names(Data[,c(1:5,139:152)]), subset3)]
 Data_logi <- na.omit(Data_logi) %>%
   Standarize()
 
+write.csv(Data_logi, file = "Stats_141_Combined_Data2.csv", row.names = FALSE)
 
 #find interaction
 gg_int <- gg_interaction(find.interaction(rfsrc_m3,
@@ -932,10 +915,6 @@ plot(gg_int)
 
 high_cor <- findCorrelation(cor(Data_logi[,-c(1,3:5)]),cutoff = 0.75) + 4
 
-#variables suggested to remove 
-
-findCorrelation(cor(Data_logi[,-c(1,3:5)]),cutoff = 0.75, names = TRUE)
-
 #Remove variables to prevent multicollinearity problem
 Data_logi <- Data_logi %>%
   select(-c(high_cor))
@@ -945,6 +924,8 @@ index <- sample(1:nrow(Data_logi), size = round(nrow(Data_logi)*0.7,0),replace =
 Data_train <- Data_logi[index,]
 Data_test <- Data_logi[-index,]
 logi_m3 <-glm(Study~. + Subject_Type*Age , data = Data_train, family = "binomial") 
+
+save.model(logi_m3, file = "logistic_model.RData")
 summary(logi_m3)
 round(exp(coef(logi_m3)),3)
 anova(logi_m3, test = "Chisq")
@@ -982,22 +963,17 @@ Classify(Data_train, Data_train$prediction,"Study", 0.55)
 Classify(Data_test, Data_test$prediction,"Study", 0.55)
 
 
-```
-
-```{r warning = FALSE}
 #Combine data model k fold CV check
-#Here we are not interesting in looking at the True positive rate
 set.seed(4321)
 
 Accuracy.k <- cv.error(Data_logi, "Study", cut_off = 0.55)[[1]]
+Accuracy.k
 mean(Accuracy.k)
 ```
 
-
-
+\subsection{Plots}
 ```{r}
 par(mfrow = c(2,2))
-
 
 ggplot(data = na.omit(Data), aes(x = Gender, fill = Study)) +
   geom_bar() +
@@ -1026,9 +1002,9 @@ plot4 <- ggplot(data = na.omit(Data), aes(x = Education, fill = Study)) +
   theme_bw()
 
 grid.arrange(plot3,plot4, nrow = 1, ncol = 2)
-
 ```
 
+\subsection{Hypothesis Testings}
 ```{r}
 #Recall the anova output for the combined data set logistic model
 
@@ -1050,6 +1026,8 @@ t.test(Education~Study, data = Data_logi)
 chisq.test(table(Data_logi$Study, Data_logi$Gender))
 chisq.test(table(Data_logi$Study, Data_logi$Ethnicity))
 chisq.test(table(Data_logi$Study, Data_logi$Subject_Type))
-
 ```
+
+
+
 
